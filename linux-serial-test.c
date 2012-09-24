@@ -95,7 +95,7 @@ void process_options(int argc, char * argv[])
 {
 	for (;;) {
 		int option_index = 0;
-		static const char *short_options = "b:p:d:RT";
+		static const char *short_options = "b:p:d:RTs";
 		static const struct option long_options[] = {
 			{"help", no_argument, 0, 0},
 			{"baud", required_argument, 0, 'b'},
@@ -147,11 +147,16 @@ unsigned char _write_count_value = 0;
 unsigned char _read_count_value = 0;
 int _fd = -1;
 
+// keep our own counts for cases where the driver stats don't work
+int _write_count = 0;
+int _read_count = 0;
+
 void process_read_data()
 {
 	unsigned char rb[30];
 	int c = read(_fd, &rb, sizeof(rb));
 	if (c > 0) {
+		_read_count += c;
 		if (_cl_rx_dump)
 			dump_data(rb, c);
 
@@ -183,6 +188,7 @@ void process_write_data()
 		int c = write(_fd, &write_data, sizeof(write_data));
 
 		if (c > 0) {
+			_write_count += c;
 			count += c;
 		}
 
@@ -202,9 +208,9 @@ void dump_serial_port_stats()
     struct serial_icounter_struct icount = {};
     int ret = ioctl(_fd, TIOCGICOUNT, &icount);
     if (ret == -1) {
-	    printf("Error getting serial port stats\n"); 
+	    printf("%s: rx=%i, tx=%i\n", _cl_port, _read_count, _write_count);
     } else {
-	    printf("%s, TIOCGICOUNT: ret=%i, rx=%i, tx=%i, frame = %i, overrun = %i, parity = %i, brk = %i, buf_overrun = %i",
+	    printf("%s: TIOCGICOUNT: ret=%i, rx=%i, tx=%i, frame = %i, overrun = %i, parity = %i, brk = %i, buf_overrun = %i",
 		_cl_port, ret, icount.rx, icount.tx, icount.frame, icount.overrun, icount.parity, icount.brk,
 		icount.buf_overrun);
     }
