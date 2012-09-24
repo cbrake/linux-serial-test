@@ -14,6 +14,23 @@
 #include <time.h>
 #include <linux/serial.h>
 
+// command line args
+int _cl_baud = 0;
+char _cl_port[50] = "";
+int _cl_divisor = 0;
+int _cl_rx_dump = 0;
+int _cl_tx_detailed = 0;
+int _cl_stats = 0;
+
+// Module variables
+unsigned char _write_count_value = 0;
+unsigned char _read_count_value = 0;
+int _fd = -1;
+
+// keep our own counts for cases where the driver stats don't work
+int _write_count = 0;
+int _read_count = 0;
+
 void dump_data(unsigned char * b, int count) {
 	printf("%i bytes: ", count);
 	int i;
@@ -22,6 +39,30 @@ void dump_data(unsigned char * b, int count) {
 	}
 
 	printf("\n");
+}
+
+int set_baud_divisor(int speed)
+{
+	// default baud was not found, so try to set a custom divisor
+	struct serial_struct ss;
+	if (ioctl(_fd, TIOCGSERIAL, &ss) != 0) {
+		printf("TIOCGSERIAL failed\n");
+		return -1;
+	}
+
+	ss.flags = (ss.flags & ~ASYNC_SPD_MASK) | ASYNC_SPD_CUST;
+	ss.custom_divisor = (ss.baud_base + (speed/2)) / speed;
+	int closest_speed = ss.baud_base / ss.custom_divisor;
+
+	if (closest_speed < speed * 98 / 100 || closest_speed > speed * 102 / 100) {
+		printf("Cannot set speed to %d, closest is %d\n", speed, closest_speed);
+		exit(-1);
+	}
+
+	printf("closest baud = %i, base = %i, divisor = %i\n", closest_speed, ss.baud_base,
+			ss.custom_divisor);
+
+	ioctl(_fd, TIOCSSERIAL, &ss);
 }
 
 // converts integer baud to Linux define
@@ -64,7 +105,7 @@ int get_baud(int baud)
 		return B3500000;
 	case 4000000:
 		return B4000000;
-	default:
+	default: 
 		return -1;
 	}
 }
@@ -84,12 +125,6 @@ void display_help()
 	exit(0);
 }
 
-int _cl_baud = 0;
-char _cl_port[50] = "";
-int _cl_divisor = 0;
-int _cl_rx_dump = 0;
-int _cl_tx_detailed = 0;
-int _cl_stats = 0;
 
 void process_options(int argc, char * argv[])
 {
@@ -143,13 +178,6 @@ void process_options(int argc, char * argv[])
 	}
 }
 
-unsigned char _write_count_value = 0;
-unsigned char _read_count_value = 0;
-int _fd = -1;
-
-// keep our own counts for cases where the driver stats don't work
-int _write_count = 0;
-int _read_count = 0;
 
 void process_read_data()
 {
@@ -216,27 +244,8 @@ void dump_serial_port_stats()
     }
 }
 
-int main(int argc, char * argv[])
+void setup_serial_port(int baud)
 {
-	printf("Linux serial test app\n");
-
-	process_options(argc, argv);
-
-	if (_cl_port[0] == 0) {
-		printf("ERROR: Port argument required\n");
-		display_help();
-	}
-
-	int baud = B115200;
-
-	if (_cl_baud)
-		baud = get_baud(_cl_baud);
-
-	if (baud <= 0) {
-		printf("ERROR: non standard baud rate\n");
-		exit(-1);
-	}
-
 	struct termios newtio;
 
 	_fd = open(_cl_port, O_RDWR | O_NONBLOCK);
@@ -263,6 +272,32 @@ int main(int argc, char * argv[])
 	/* now clean the modem line and activate the settings for the port */
 	tcflush(_fd, TCIFLUSH);
 	tcsetattr(_fd,TCSANOW,&newtio);
+}
+
+int main(int argc, char * argv[])
+{
+	printf("Linux serial test app\n");
+
+	process_options(argc, argv);
+
+	if (_cl_port[0] == 0) {
+		printf("ERROR: Port argument required\n");
+		display_help();
+	}
+
+	int baud = B115200;
+
+	if (_cl_baud)
+		baud = get_baud(_cl_baud);
+
+	if (baud <= 0) {
+		printf("NOTE: non standard baud rate, trying custom divisor\n");
+		baud = B38400;
+		setup_serial_port(B38400);
+		set_baud_divisor(_cl_baud);
+	} else {
+		setup_serial_port(baud);
+	}
 
 	struct pollfd serial_poll;
 	serial_poll.fd = _fd;
