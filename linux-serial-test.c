@@ -199,6 +199,20 @@ void process_options(int argc, char * argv[])
 	}
 }
 
+void dump_serial_port_stats()
+{
+	struct serial_icounter_struct icount = {};
+
+	printf("%s: count for this session: rx=%i, tx=%i\n", _cl_port, _read_count, _write_count);
+
+	int ret = ioctl(_fd, TIOCGICOUNT, &icount);
+	if (ret != -1) {
+		printf("%s: TIOCGICOUNT: ret=%i, rx=%i, tx=%i, frame = %i, overrun = %i, parity = %i, brk = %i, buf_overrun = %i\n",
+				_cl_port, ret, icount.rx, icount.tx, icount.frame, icount.overrun, icount.parity, icount.brk,
+				icount.buf_overrun);
+	}
+}
+
 void process_read_data()
 {
 	unsigned char rb[30];
@@ -214,6 +228,7 @@ void process_read_data()
 			if (rb[i] != _read_count_value) {
 				printf("Error, expected %02x, got %02x\n",
 						_read_count_value, rb[i]);
+				dump_serial_port_stats();
 				exit(-1);
 			}
 			_read_count_value++;
@@ -251,18 +266,6 @@ void process_write_data()
 	}
 }
 
-void dump_serial_port_stats()
-{
-    struct serial_icounter_struct icount = {};
-    int ret = ioctl(_fd, TIOCGICOUNT, &icount);
-    if (ret == -1) {
-	    printf("%s: rx=%i, tx=%i\n", _cl_port, _read_count, _write_count);
-    } else {
-	    printf("%s: TIOCGICOUNT: ret=%i, rx=%i, tx=%i, frame = %i, overrun = %i, parity = %i, brk = %i, buf_overrun = %i",
-		_cl_port, ret, icount.rx, icount.tx, icount.frame, icount.overrun, icount.parity, icount.brk,
-		icount.buf_overrun);
-    }
-}
 
 void setup_serial_port(int baud)
 {
@@ -368,7 +371,7 @@ int main(int argc, char * argv[])
 			clock_gettime(CLOCK_MONOTONIC, &current);
 			if (current.tv_sec - last_stat.tv_sec > 5) {
 				dump_serial_port_stats();
-				clock_gettime(CLOCK_MONOTONIC, &last_stat);
+				last_stat = current;
 			}
 		}
 	}
