@@ -21,6 +21,9 @@ int _cl_divisor = 0;
 int _cl_rx_dump = 0;
 int _cl_tx_detailed = 0;
 int _cl_stats = 0;
+int _cl_timing_byte = 0;
+int _cl_single_byte = -1;
+int _cl_another_byte = -1;
 
 // Module variables
 unsigned char _write_count_value = 0;
@@ -121,6 +124,9 @@ void display_help()
 			"  -R, --rx_dump     Dump Rx data\n"
 			"  -T, --detailed_tx Detailed Tx data\n"
 			"  -s, --stats       Dump serial port stats every 5s\n"
+			"  -a, --timing-byte output a double 0x80 to the serial port for measuring bit timimg\n"
+			"  -y, --single-bype send specified byte to the serial port \n"
+			"  -z, --second-bype send another specified byte to the serial port \n"
 	      );
 	exit(0);
 }
@@ -130,7 +136,7 @@ void process_options(int argc, char * argv[])
 {
 	for (;;) {
 		int option_index = 0;
-		static const char *short_options = "b:p:d:RTs";
+		static const char *short_options = "b:p:d:RTsay:z:";
 		static const struct option long_options[] = {
 			{"help", no_argument, 0, 0},
 			{"baud", required_argument, 0, 'b'},
@@ -139,6 +145,8 @@ void process_options(int argc, char * argv[])
 			{"rx_dump", no_argument, 0, 'R'},
 			{"detailed_tx", no_argument, 0, 'T'},
 			{"stats", no_argument, 0, 's'},
+			{"timing-byte", no_argument, 0, 'a'},
+			{"single-bype", no_argument, 0, 'z'},
 			{0,0,0,0},
 		};
 
@@ -174,10 +182,22 @@ void process_options(int argc, char * argv[])
 		case 's':
 			_cl_stats = 1;
 			break;
+		case 'a':
+			_cl_timing_byte = 1;
+			break;
+		case 'y': {
+			char * endptr;
+			_cl_single_byte = strtol(optarg, &endptr, 0);
+			break;
+		}
+		case 'z': {
+			char * endptr;
+			_cl_another_byte = strtol(optarg, &endptr, 0);
+			break;
+		}
 		}
 	}
 }
-
 
 void process_read_data()
 {
@@ -297,6 +317,25 @@ int main(int argc, char * argv[])
 		set_baud_divisor(_cl_baud);
 	} else {
 		setup_serial_port(baud);
+	}
+
+	if (_cl_timing_byte) {
+		printf("Wrote 0x10, 0x10 to the serial port");
+		char data[] = {0x80, 0x80};
+		write(_fd, &data, sizeof(data));
+		return 0;
+	}
+
+	if (_cl_single_byte >= 0) {
+		unsigned char data[2];
+		data[0] = (unsigned char)_cl_single_byte;
+		if (_cl_another_byte < 0) {
+			write(_fd, &data, 1);
+		} else {
+			data[1] = _cl_another_byte;
+			write(_fd, &data, 2);
+		}
+		return 0;
 	}
 
 	struct pollfd serial_poll;
