@@ -20,6 +20,14 @@ linux-serial-test
 
 # Examples
 
+## Stress test a connection
+
+    linux-serial-test -s -p /dev/ttyO0 -b 3000000
+
+This will send full bandwidth data with a counting pattern out the TX signal.
+On any data received on RX, the program will look for a counting pattern and 
+report any missing data in the pattern.
+
 ## Output a pattern where you can easily verify baud rate with scope:
 
     linux-serial-test -y 0x55 -z 0x0 -p /dev/ttyO0 -b 3000000

@@ -21,9 +21,11 @@ int _cl_divisor = 0;
 int _cl_rx_dump = 0;
 int _cl_tx_detailed = 0;
 int _cl_stats = 0;
-int _cl_timing_byte = 0;
+int _cl_stop_on_error = 0;
 int _cl_single_byte = -1;
 int _cl_another_byte = -1;
+int _cl_rts_cts = 0;
+int _cl_dump_err = 0;
 
 // Module variables
 unsigned char _write_count_value = 0;
@@ -33,6 +35,7 @@ int _fd = -1;
 // keep our own counts for cases where the driver stats don't work
 int _write_count = 0;
 int _read_count = 0;
+int _error_count = 0;
 
 void dump_data(unsigned char * b, int count) {
 	printf("%i bytes: ", count);
@@ -124,9 +127,11 @@ void display_help()
 			"  -R, --rx_dump     Dump Rx data\n"
 			"  -T, --detailed_tx Detailed Tx data\n"
 			"  -s, --stats       Dump serial port stats every 5s\n"
-			"  -a, --timing-byte output a double 0x80 to the serial port for measuring bit timimg\n"
-			"  -y, --single-bype send specified byte to the serial port \n"
-			"  -z, --second-bype send another specified byte to the serial port \n"
+			"  -S, --stop-on-err Stop program if we encounter an error\n"
+			"  -y, --single-bype Send specified byte to the serial port \n"
+			"  -z, --second-bype Send another specified byte to the serial port \n"
+			"  -c, --rts-cts     Enable RTS/CTS flow control \n"
+			"  -e, --dump-err    Display errors \n"
 	      );
 	exit(0);
 }
@@ -136,7 +141,7 @@ void process_options(int argc, char * argv[])
 {
 	for (;;) {
 		int option_index = 0;
-		static const char *short_options = "b:p:d:RTsay:z:";
+		static const char *short_options = "b:p:d:RTsSy:z:ce";
 		static const struct option long_options[] = {
 			{"help", no_argument, 0, 0},
 			{"baud", required_argument, 0, 'b'},
@@ -145,8 +150,10 @@ void process_options(int argc, char * argv[])
 			{"rx_dump", no_argument, 0, 'R'},
 			{"detailed_tx", no_argument, 0, 'T'},
 			{"stats", no_argument, 0, 's'},
+			{"stop-on-error", no_argument, 0, 'S'},
 			{"timing-byte", no_argument, 0, 'a'},
 			{"single-bype", no_argument, 0, 'z'},
+			{"rts-cts", no_argument, 0, 'c'},
 			{0,0,0,0},
 		};
 
@@ -173,7 +180,7 @@ void process_options(int argc, char * argv[])
 		case 'd':
 			_cl_divisor = atoi(optarg);
 			break;
-		case 'D':
+		case 'R':
 			_cl_rx_dump = 1;
 			break;
 		case 'T':
@@ -182,8 +189,8 @@ void process_options(int argc, char * argv[])
 		case 's':
 			_cl_stats = 1;
 			break;
-		case 'a':
-			_cl_timing_byte = 1;
+		case 'S':
+			_cl_stop_on_error = 1;
 			break;
 		case 'y': {
 			char * endptr;
@@ -195,6 +202,12 @@ void process_options(int argc, char * argv[])
 			_cl_another_byte = strtol(optarg, &endptr, 0);
 			break;
 		}
+		case 'c':
+			_cl_rts_cts = 1;
+			break;
+		case 'e':
+			_cl_dump_err = 1;
+			break;
 		}
 	}
 }
@@ -203,7 +216,7 @@ void dump_serial_port_stats()
 {
 	struct serial_icounter_struct icount = {};
 
-	printf("%s: count for this session: rx=%i, tx=%i\n", _cl_port, _read_count, _write_count);
+	printf("%s: count for this session: rx=%i, tx=%i, rx err=%i\n", _cl_port, _read_count, _write_count, _error_count);
 
 	int ret = ioctl(_fd, TIOCGICOUNT, &icount);
 	if (ret != -1) {
@@ -218,7 +231,6 @@ void process_read_data()
 	unsigned char rb[30];
 	int c = read(_fd, &rb, sizeof(rb));
 	if (c > 0) {
-		_read_count += c;
 		if (_cl_rx_dump)
 			dump_data(rb, c);
 
@@ -226,13 +238,20 @@ void process_read_data()
 		int i;
 		for (i = 0; i < c; i++) {
 			if (rb[i] != _read_count_value) {
-				printf("Error, expected %02x, got %02x\n",
-						_read_count_value, rb[i]);
-				dump_serial_port_stats();
-				exit(-1);
+				if (_cl_dump_err) {
+					printf("Error, count: %i, expected %02x, got %02x\n",
+							_read_count + i, _read_count_value, rb[i]);
+				}
+				_error_count++;
+				if (_cl_stop_on_error) {
+					dump_serial_port_stats();
+					exit(-1);
+				}
+				_read_count_value = rb[i];
 			}
 			_read_count_value++;
 		}
+		_read_count += c;
 	}
 }
 
@@ -282,6 +301,11 @@ void setup_serial_port(int baud)
 
 	/* man termios get more info on below settings */
 	newtio.c_cflag = baud | CS8 | CLOCAL | CREAD;
+
+	if (_cl_rts_cts) {
+		newtio.c_cflag |= CRTSCTS;
+	}
+
 	newtio.c_iflag = 0;
 	newtio.c_oflag = 0;
 	newtio.c_lflag = 0;
@@ -320,13 +344,6 @@ int main(int argc, char * argv[])
 		set_baud_divisor(_cl_baud);
 	} else {
 		setup_serial_port(baud);
-	}
-
-	if (_cl_timing_byte) {
-		printf("Wrote 0x10, 0x10 to the serial port");
-		char data[] = {0x80, 0x80};
-		write(_fd, &data, sizeof(data));
-		return 0;
 	}
 
 	if (_cl_single_byte >= 0) {
