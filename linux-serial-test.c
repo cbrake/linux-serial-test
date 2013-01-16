@@ -26,6 +26,8 @@ int _cl_single_byte = -1;
 int _cl_another_byte = -1;
 int _cl_rts_cts = 0;
 int _cl_dump_err = 0;
+int _cl_no_rx = 0;
+int _cl_rx_delay = 0;
 
 // Module variables
 unsigned char _write_count_value = 0;
@@ -132,16 +134,18 @@ void display_help()
 			"  -z, --second-bype Send another specified byte to the serial port \n"
 			"  -c, --rts-cts     Enable RTS/CTS flow control \n"
 			"  -e, --dump-err    Display errors \n"
+			"  -r, --no-rx       Don't receive data (can be used to test flow control\n"
+		        "                    when serial driver buffer is full\n"
+			"  -l, --rx-delay    Delay between reading data (can be used to test flow control\n"
 	      );
 	exit(0);
 }
-
 
 void process_options(int argc, char * argv[])
 {
 	for (;;) {
 		int option_index = 0;
-		static const char *short_options = "b:p:d:RTsSy:z:ce";
+		static const char *short_options = "b:p:d:RTsSy:z:cer";
 		static const struct option long_options[] = {
 			{"help", no_argument, 0, 0},
 			{"baud", required_argument, 0, 'b'},
@@ -154,6 +158,7 @@ void process_options(int argc, char * argv[])
 			{"timing-byte", no_argument, 0, 'a'},
 			{"single-bype", no_argument, 0, 'z'},
 			{"rts-cts", no_argument, 0, 'c'},
+			{"no-rx", no_argument, 0, 'r'},
 			{0,0,0,0},
 		};
 
@@ -208,6 +213,9 @@ void process_options(int argc, char * argv[])
 		case 'e':
 			_cl_dump_err = 1;
 			break;
+		case 'r':
+			_cl_no_rx = 1;
+			break;
 		}
 	}
 }
@@ -258,7 +266,7 @@ void process_read_data()
 void process_write_data()
 {
 	int count = 0;
-	unsigned char write_data[100] = {0};
+	unsigned char write_data[1024] = {0};
 
 	while (1) {
 		int i;
@@ -360,13 +368,17 @@ int main(int argc, char * argv[])
 
 	struct pollfd serial_poll;
 	serial_poll.fd = _fd;
-	serial_poll.events = POLLIN|POLLOUT;
+	if (_cl_no_rx) 
+		serial_poll.events = POLLOUT;
+	else
+		serial_poll.events = POLLIN|POLLOUT;
 
 	struct timespec last_stat;
 
 	clock_gettime(CLOCK_MONOTONIC, &last_stat);
 
 	while (1) {
+		usleep(10*1000);
 		int retval = poll(&serial_poll, 1, 10000);
 
 		if (retval == -1) {
