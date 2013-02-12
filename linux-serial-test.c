@@ -28,6 +28,7 @@ int _cl_rts_cts = 0;
 int _cl_dump_err = 0;
 int _cl_no_rx = 0;
 int _cl_rx_delay = 0;
+int _cl_rs485_delay = -1;
 
 // Module variables
 unsigned char _write_count_value = 0;
@@ -137,6 +138,9 @@ void display_help()
 			"  -r, --no-rx       Don't receive data (can be used to test flow control\n"
 		        "                    when serial driver buffer is full\n"
 			"  -l, --rx-delay    Delay between reading data (can be used to test flow control\n"
+			"  -q, --rs485       Enable RS485 direction control on port, and set delay\n"
+			"                    from when TX is finished and RS485 driver enable is\n"
+			"                    de-asserted. Delay is specified in bit times (0-7)"
 	      );
 	exit(0);
 }
@@ -145,7 +149,7 @@ void process_options(int argc, char * argv[])
 {
 	for (;;) {
 		int option_index = 0;
-		static const char *short_options = "b:p:d:RTsSy:z:cer";
+		static const char *short_options = "b:p:d:RTsSy:z:cerlq:";
 		static const struct option long_options[] = {
 			{"help", no_argument, 0, 0},
 			{"baud", required_argument, 0, 'b'},
@@ -159,6 +163,8 @@ void process_options(int argc, char * argv[])
 			{"single-bype", no_argument, 0, 'z'},
 			{"rts-cts", no_argument, 0, 'c'},
 			{"no-rx", no_argument, 0, 'r'},
+			{"rx-delay", required_argument, 0, 'l'},
+			{"rs485", required_argument, 0, 'q'},
 			{0,0,0,0},
 		};
 
@@ -216,6 +222,14 @@ void process_options(int argc, char * argv[])
 		case 'r':
 			_cl_no_rx = 1;
 			break;
+		case 'l':
+			printf("-l not implemented\n");
+			break;
+		case 'q': {
+			char *endptr;
+			_cl_rs485_delay = strtol(optarg, &endptr, 0);
+			break;
+		}
 		}
 	}
 }
@@ -327,6 +341,17 @@ void setup_serial_port(int baud)
 	/* now clean the modem line and activate the settings for the port */
 	tcflush(_fd, TCIFLUSH);
 	tcsetattr(_fd,TCSANOW,&newtio);
+
+	/* enable rs485 direction control */
+	if (_cl_rs485_delay >= 0) {
+		struct serial_rs485 rs485;
+		rs485.flags = SER_RS485_ENABLED | SER_RS485_RTS_ON_SEND | SER_RS485_RTS_AFTER_SEND;
+		rs485.delay_rts_after_send = _cl_rs485_delay;
+		rs485.delay_rts_before_send = 0;
+		if(ioctl(_fd, TIOCSRS485, &rs485) < 0) {
+			printf("Error setting rs485 mode\n");
+		}
+	}
 }
 
 int main(int argc, char * argv[])
