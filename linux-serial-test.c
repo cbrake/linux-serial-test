@@ -27,6 +27,7 @@ int _cl_another_byte = -1;
 int _cl_rts_cts = 0;
 int _cl_dump_err = 0;
 int _cl_no_rx = 0;
+int _cl_no_tx = 0;
 int _cl_rx_delay = 0;
 int _cl_rs485_delay = -1;
 
@@ -137,10 +138,12 @@ void display_help()
 			"  -e, --dump-err    Display errors \n"
 			"  -r, --no-rx       Don't receive data (can be used to test flow control\n"
 		        "                    when serial driver buffer is full\n"
+			"  -t, --no-tx       Don't transmit data\n"
 			"  -l, --rx-delay    Delay between reading data (can be used to test flow control\n"
 			"  -q, --rs485       Enable RS485 direction control on port, and set delay\n"
 			"                    from when TX is finished and RS485 driver enable is\n"
-			"                    de-asserted. Delay is specified in bit times (0-7)"
+			"                    de-asserted. Delay is specified in bit times (0-7)\n"
+			"\n"
 	      );
 	exit(0);
 }
@@ -149,7 +152,7 @@ void process_options(int argc, char * argv[])
 {
 	for (;;) {
 		int option_index = 0;
-		static const char *short_options = "b:p:d:RTsSy:z:cerlq:";
+		static const char *short_options = "b:p:d:RTsSy:z:certlq:";
 		static const struct option long_options[] = {
 			{"help", no_argument, 0, 0},
 			{"baud", required_argument, 0, 'b'},
@@ -163,6 +166,7 @@ void process_options(int argc, char * argv[])
 			{"single-bype", no_argument, 0, 'z'},
 			{"rts-cts", no_argument, 0, 'c'},
 			{"no-rx", no_argument, 0, 'r'},
+			{"no-tx", no_argument, 0, 't'},
 			{"rx-delay", required_argument, 0, 'l'},
 			{"rs485", required_argument, 0, 'q'},
 			{0,0,0,0},
@@ -221,6 +225,9 @@ void process_options(int argc, char * argv[])
 			break;
 		case 'r':
 			_cl_no_rx = 1;
+			break;
+		case 't':
+			_cl_no_tx = 1;
 			break;
 		case 'l':
 			printf("-l not implemented\n");
@@ -393,10 +400,17 @@ int main(int argc, char * argv[])
 
 	struct pollfd serial_poll;
 	serial_poll.fd = _fd;
-	if (_cl_no_rx) 
-		serial_poll.events = POLLOUT;
-	else
-		serial_poll.events = POLLIN|POLLOUT;
+	if (!_cl_no_rx) {
+		serial_poll.events |= POLLIN;
+	} else {
+		serial_poll.events &= ~POLLIN;
+	}
+
+	if (!_cl_no_tx) {
+		serial_poll.events |= POLLOUT;
+	} else {
+		serial_poll.events &= ~POLLOUT;
+	}
 
 	struct timespec last_stat;
 
