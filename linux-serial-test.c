@@ -257,7 +257,7 @@ void dump_serial_port_stats()
 
 void process_read_data()
 {
-	unsigned char rb[30];
+	unsigned char rb[1024];
 	int c = read(_fd, &rb, sizeof(rb));
 	if (c > 0) {
 		if (_cl_rx_dump)
@@ -417,7 +417,6 @@ int main(int argc, char * argv[])
 	clock_gettime(CLOCK_MONOTONIC, &last_stat);
 
 	while (1) {
-		usleep(10*1000);
 		int retval = poll(&serial_poll, 1, 10000);
 
 		if (retval == -1) {
