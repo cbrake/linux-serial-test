@@ -11,7 +11,7 @@ linux-serial-test
       -b, --baud        Baud rate, 115200, etc (115200 is default)
       -p, --port        Port (/dev/ttyS0, etc) (must be specified)
       -d, --divisor     UART Baud rate divisor (can be used to set custom baud rates
-      -R, --rx_dump     Dump Rx data
+      -R, --rx_dump     Dump Rx data (ascii, raw)
       -T, --detailed_tx Detailed Tx data
       -s, --stats       Dump serial port stats every 5s
       -a, --timing-byte output a double 0x80 to the serial port for measuring bit timimg
