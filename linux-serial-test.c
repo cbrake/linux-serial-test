@@ -19,6 +19,7 @@ int _cl_baud = 0;
 char _cl_port[50] = "";
 int _cl_divisor = 0;
 int _cl_rx_dump = 0;
+int _cl_rx_dump_ascii = 0;
 int _cl_tx_detailed = 0;
 int _cl_stats = 0;
 int _cl_stop_on_error = 0;
@@ -49,6 +50,13 @@ void dump_data(unsigned char * b, int count) {
 	}
 
 	printf("\n");
+}
+
+void dump_data_ascii(unsigned char * b, int count) {
+	int i;
+	for (i=0; i < count; i++) {
+		printf("%c", b[i]);
+	}
 }
 
 int set_baud_divisor(int speed)
@@ -128,7 +136,7 @@ void display_help()
 			"  -b, --baud        Baud rate, 115200, etc (115200 is default)\n"
 			"  -p, --port        Port (/dev/ttyS0, etc) (must be specified)\n"
 			"  -d, --divisor     UART Baud rate divisor (can be used to set custom baud rates\n"
-			"  -R, --rx_dump     Dump Rx data\n"
+			"  -R, --rx_dump     Dump Rx data (ascii, raw)\n"
 			"  -T, --detailed_tx Detailed Tx data\n"
 			"  -s, --stats       Dump serial port stats every 5s\n"
 			"  -S, --stop-on-err Stop program if we encounter an error\n"
@@ -152,13 +160,13 @@ void process_options(int argc, char * argv[])
 {
 	for (;;) {
 		int option_index = 0;
-		static const char *short_options = "b:p:d:RTsSy:z:certlq:";
+		static const char *short_options = "b:p:d:R:TsSy:z:certlq:";
 		static const struct option long_options[] = {
 			{"help", no_argument, 0, 0},
 			{"baud", required_argument, 0, 'b'},
 			{"port", required_argument, 0, 'p'},
 			{"divisor", required_argument, 0, 'd'},
-			{"rx_dump", no_argument, 0, 'R'},
+			{"rx_dump", required_argument, 0, 'R'},
 			{"detailed_tx", no_argument, 0, 'T'},
 			{"stats", no_argument, 0, 's'},
 			{"stop-on-error", no_argument, 0, 'S'},
@@ -197,6 +205,7 @@ void process_options(int argc, char * argv[])
 			break;
 		case 'R':
 			_cl_rx_dump = 1;
+			_cl_rx_dump_ascii = !strcmp(optarg, "ascii");
 			break;
 		case 'T':
 			_cl_tx_detailed = 1;
@@ -260,8 +269,12 @@ void process_read_data()
 	unsigned char rb[1024];
 	int c = read(_fd, &rb, sizeof(rb));
 	if (c > 0) {
-		if (_cl_rx_dump)
-			dump_data(rb, c);
+		if (_cl_rx_dump) {
+			if (_cl_rx_dump_ascii)
+				dump_data_ascii(rb, c);
+			else
+				dump_data(rb, c);
+		}
 
 		// verify read count is incrementing
 		int i;
