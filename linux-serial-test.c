@@ -140,8 +140,8 @@ void display_help()
 			"  -T, --detailed_tx Detailed Tx data\n"
 			"  -s, --stats       Dump serial port stats every 5s\n"
 			"  -S, --stop-on-err Stop program if we encounter an error\n"
-			"  -y, --single-bype Send specified byte to the serial port \n"
-			"  -z, --second-bype Send another specified byte to the serial port \n"
+			"  -y, --single-byte Send specified byte to the serial port \n"
+			"  -z, --second-byte Send another specified byte to the serial port \n"
 			"  -c, --rts-cts     Enable RTS/CTS flow control \n"
 			"  -e, --dump-err    Display errors \n"
 			"  -r, --no-rx       Don't receive data (can be used to test flow control\n"
@@ -171,7 +171,7 @@ void process_options(int argc, char * argv[])
 			{"stats", no_argument, 0, 's'},
 			{"stop-on-error", no_argument, 0, 'S'},
 			{"timing-byte", no_argument, 0, 'a'},
-			{"single-bype", no_argument, 0, 'z'},
+			{"single-byte", no_argument, 0, 'z'},
 			{"rts-cts", no_argument, 0, 'c'},
 			{"no-rx", no_argument, 0, 'r'},
 			{"no-tx", no_argument, 0, 't'},
