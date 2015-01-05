@@ -16,7 +16,7 @@
 
 // command line args
 int _cl_baud = 0;
-char _cl_port[50] = "";
+char *_cl_port = NULL;
 int _cl_divisor = 0;
 int _cl_rx_dump = 0;
 int _cl_rx_dump_ascii = 0;
@@ -198,7 +198,7 @@ void process_options(int argc, char * argv[])
 			_cl_baud = atoi(optarg);
 			break;
 		case 'p':
-			strncpy(_cl_port, optarg, sizeof(_cl_port));
+			_cl_port = strdup(optarg);
 			break;
 		case 'd':
 			_cl_divisor = atoi(optarg);
@@ -336,6 +336,7 @@ void setup_serial_port(int baud)
 
 	if (_fd < 0) {
 		printf("Error opening serial port \n");
+		free(_cl_port);
 		exit(-1);
 	}
 
@@ -380,7 +381,7 @@ int main(int argc, char * argv[])
 
 	process_options(argc, argv);
 
-	if (_cl_port[0] == 0) {
+	if (!_cl_port) {
 		printf("ERROR: Port argument required\n");
 		display_help();
 	}
@@ -455,6 +456,7 @@ int main(int argc, char * argv[])
 			}
 		}
 	}
+	free(_cl_port);
 }
 
 
