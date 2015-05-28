@@ -135,22 +135,22 @@ void display_help()
 			"  -h, --help\n"
 			"  -b, --baud        Baud rate, 115200, etc (115200 is default)\n"
 			"  -p, --port        Port (/dev/ttyS0, etc) (must be specified)\n"
-			"  -d, --divisor     UART Baud rate divisor (can be used to set custom baud rates\n"
+			"  -d, --divisor     UART Baud rate divisor (can be used to set custom baud rates)\n"
 			"  -R, --rx_dump     Dump Rx data (ascii, raw)\n"
 			"  -T, --detailed_tx Detailed Tx data\n"
 			"  -s, --stats       Dump serial port stats every 5s\n"
 			"  -S, --stop-on-err Stop program if we encounter an error\n"
-			"  -y, --single-byte Send specified byte to the serial port \n"
-			"  -z, --second-byte Send another specified byte to the serial port \n"
-			"  -c, --rts-cts     Enable RTS/CTS flow control \n"
-			"  -e, --dump-err    Display errors \n"
-			"  -r, --no-rx       Don't receive data (can be used to test flow control\n"
-		        "                    when serial driver buffer is full\n"
+			"  -y, --single-byte Send specified byte to the serial port\n"
+			"  -z, --second-byte Send another specified byte to the serial port\n"
+			"  -c, --rts-cts     Enable RTS/CTS flow control\n"
+			"  -e, --dump-err    Display errors\n"
+			"  -r, --no-rx       Don't receive data (can be used to test flow control)\n"
+			"                    when serial driver buffer is full\n"
 			"  -t, --no-tx       Don't transmit data\n"
-			"  -l, --rx-delay    Delay between reading data (can be used to test flow control\n"
+			"  -l, --rx-delay    Delay between reading data (can be used to test flow control)\n"
 			"  -q, --rs485       Enable RS485 direction control on port, and set delay\n"
 			"                    from when TX is finished and RS485 driver enable is\n"
-			"                    de-asserted. Delay is specified in bit times (0-7)\n"
+			"                    de-asserted. Delay is specified in bit times.\n"
 			"\n"
 	      );
 	exit(0);
@@ -169,10 +169,11 @@ void process_options(int argc, char * argv[])
 			{"rx_dump", required_argument, 0, 'R'},
 			{"detailed_tx", no_argument, 0, 'T'},
 			{"stats", no_argument, 0, 's'},
-			{"stop-on-error", no_argument, 0, 'S'},
-			{"timing-byte", no_argument, 0, 'a'},
-			{"single-byte", no_argument, 0, 'z'},
+			{"stop-on-err", no_argument, 0, 'S'},
+			{"single-byte", no_argument, 0, 'y'},
+			{"second-byte", no_argument, 0, 'z'},
 			{"rts-cts", no_argument, 0, 'c'},
+			{"dump-err", no_argument, 0, 'e'},
 			{"no-rx", no_argument, 0, 'r'},
 			{"no-tx", no_argument, 0, 't'},
 			{"rx-delay", required_argument, 0, 'l'},
