@@ -147,7 +147,7 @@ void display_help()
 			"  -r, --no-rx       Don't receive data (can be used to test flow control)\n"
 			"                    when serial driver buffer is full\n"
 			"  -t, --no-tx       Don't transmit data\n"
-			"  -l, --rx-delay    Delay between reading data (can be used to test flow control)\n"
+			"  -l, --rx-delay    Delay between reading data (ms) (can be used to test flow control)\n"
 			"  -q, --rs485       Enable RS485 direction control on port, and set delay\n"
 			"                    from when TX is finished and RS485 driver enable is\n"
 			"                    de-asserted. Delay is specified in bit times.\n"
@@ -239,9 +239,11 @@ void process_options(int argc, char * argv[])
 		case 't':
 			_cl_no_tx = 1;
 			break;
-		case 'l':
-			printf("-l not implemented\n");
+		case 'l': {
+			char *endptr;
+			_cl_rx_delay = strtol(optarg, &endptr, 0);
 			break;
+		}
 		case 'q': {
 			char *endptr;
 			_cl_rs485_delay = strtol(optarg, &endptr, 0);
@@ -376,6 +378,12 @@ void setup_serial_port(int baud)
 	}
 }
 
+int diff_ms(struct timespec t1, struct timespec t2)
+{
+    return (((t1.tv_sec - t2.tv_sec) * 1000) + 
+            (t1.tv_nsec - t2.tv_nsec))/1000000;
+}
+
 int main(int argc, char * argv[])
 {
 	printf("Linux serial test app\n");
@@ -428,6 +436,7 @@ int main(int argc, char * argv[])
 	}
 
 	struct timespec last_stat;
+	struct timespec last_read;
 
 	clock_gettime(CLOCK_MONOTONIC, &last_stat);
 
@@ -438,7 +447,18 @@ int main(int argc, char * argv[])
 			perror("poll()");
 		} else if (retval) {
 			if (serial_poll.revents & POLLIN) {
-				process_read_data();
+				if (_cl_rx_delay) {
+					// only read if it has been rx-delay ms
+					// since the last read
+					struct timespec current;
+					clock_gettime(CLOCK_MONOTONIC, &current);
+					if (diff_ms(current, last_read) > _cl_rx_delay) {
+						process_read_data();
+						last_read = current;
+					}
+				} else {
+					process_read_data();
+				}
 			}
 
 			if (serial_poll.revents & POLLOUT) {
