@@ -439,6 +439,7 @@ int main(int argc, char * argv[])
 	struct timespec last_read;
 
 	clock_gettime(CLOCK_MONOTONIC, &last_stat);
+	clock_gettime(CLOCK_MONOTONIC, &last_read);
 
 	while (1) {
 		int retval = poll(&serial_poll, 1, 10000);
