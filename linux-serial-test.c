@@ -31,6 +31,8 @@ int _cl_no_rx = 0;
 int _cl_no_tx = 0;
 int _cl_rx_delay = 0;
 int _cl_rs485_delay = -1;
+int _cl_tx_time = 0;
+int _cl_rx_time = 0;
 
 // Module variables
 unsigned char _write_count_value = 0;
@@ -151,6 +153,8 @@ void display_help()
 			"  -q, --rs485       Enable RS485 direction control on port, and set delay\n"
 			"                    from when TX is finished and RS485 driver enable is\n"
 			"                    de-asserted. Delay is specified in bit times.\n"
+			"  -o, --tx-time     Number of seconds to transmit for (defaults to 0, meaning no limit)\n"
+			"  -i, --rx-time     Number of seconds to receive for (defaults to 0, meaning no limit)\n"
 			"\n"
 	      );
 	exit(0);
@@ -160,7 +164,7 @@ void process_options(int argc, char * argv[])
 {
 	for (;;) {
 		int option_index = 0;
-		static const char *short_options = "hb:p:d:R:TsSy:z:certq:l:";
+		static const char *short_options = "hb:p:d:R:TsSy:z:certq:l:o:i:";
 		static const struct option long_options[] = {
 			{"help", no_argument, 0, 0},
 			{"baud", required_argument, 0, 'b'},
@@ -178,6 +182,8 @@ void process_options(int argc, char * argv[])
 			{"no-tx", no_argument, 0, 't'},
 			{"rx-delay", required_argument, 0, 'l'},
 			{"rs485", required_argument, 0, 'q'},
+			{"tx-time", required_argument, 0, 'o'},
+			{"rx-time", required_argument, 0, 'i'},
 			{0,0,0,0},
 		};
 
@@ -247,6 +253,16 @@ void process_options(int argc, char * argv[])
 		case 'q': {
 			char *endptr;
 			_cl_rs485_delay = strtol(optarg, &endptr, 0);
+			break;
+		}
+		case 'o': {
+			char *endptr;
+			_cl_tx_time = strtol(optarg, &endptr, 0);
+			break;
+		}
+		case 'i': {
+			char *endptr;
+			_cl_rx_time = strtol(optarg, &endptr, 0);
 			break;
 		}
 		}
@@ -363,7 +379,7 @@ void setup_serial_port(int baud)
 	newtio.c_cc[VTIME] = 5;
 
 	/* now clean the modem line and activate the settings for the port */
-	tcflush(_fd, TCIFLUSH);
+	tcflush(_fd, TCIOFLUSH);
 	tcsetattr(_fd,TCSANOW,&newtio);
 
 	/* enable rs485 direction control */
@@ -442,14 +458,14 @@ int main(int argc, char * argv[])
 		serial_poll.events &= ~POLLOUT;
 	}
 
-	struct timespec last_stat;
-	struct timespec last_read;
+	struct timespec start_time, last_stat;
+	struct timespec last_read = { .tv_sec = 0, .tv_nsec = 0 };
 
-	clock_gettime(CLOCK_MONOTONIC, &last_stat);
-	clock_gettime(CLOCK_MONOTONIC, &last_read);
+	clock_gettime(CLOCK_MONOTONIC, &start_time);
+	last_stat = start_time;
 
-	while (1) {
-		int retval = poll(&serial_poll, 1, 10000);
+	while (!(_cl_no_rx && _cl_no_tx)) {
+		int retval = poll(&serial_poll, 1, 1000);
 
 		if (retval == -1) {
 			perror("poll()");
@@ -472,20 +488,49 @@ int main(int argc, char * argv[])
 			if (serial_poll.revents & POLLOUT) {
 				process_write_data();
 			}
-		} else {
-			printf("No data within ten seconds.\n");
+		} else if (!(_cl_no_tx && _write_count != 0 && _write_count == _read_count)) {
+			// No data. We report this unless we are no longer
+			// transmitting and the receive count equals the
+			// transmit count, suggesting a loopback test that has
+			// finished.
+			printf("No data within one second.\n");
 		}
 
-		if (_cl_stats) {
+		if (_cl_stats || _cl_tx_time || _cl_rx_time) {
 			struct timespec current;
 			clock_gettime(CLOCK_MONOTONIC, &current);
-			if (current.tv_sec - last_stat.tv_sec > 5) {
-				dump_serial_port_stats();
-				last_stat = current;
+
+			if (_cl_stats) {
+				if (current.tv_sec - last_stat.tv_sec > 5) {
+					dump_serial_port_stats();
+					last_stat = current;
+				}
+			}
+			if (_cl_tx_time) {
+				if (current.tv_sec - start_time.tv_sec >= _cl_tx_time) {
+					_cl_tx_time = 0;
+					_cl_no_tx = 1;
+					serial_poll.events &= ~POLLOUT;
+					printf("Stopped transmitting.\n");
+				}
+			}
+			if (_cl_rx_time) {
+				if (current.tv_sec - start_time.tv_sec >= _cl_rx_time) {
+					_cl_rx_time = 0;
+					_cl_no_rx = 1;
+					serial_poll.events &= ~POLLIN;
+					printf("Stopped receiving.\n");
+				}
 			}
 		}
 	}
+
+	tcdrain(_fd);
+	dump_serial_port_stats();
+	tcflush(_fd, TCIOFLUSH);
 	free(_cl_port);
+
+	int result = abs(_write_count - _read_count) + _error_count;
+
+	return (result > 255) ? 255 : result;
 }
-
-
