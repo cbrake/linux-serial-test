@@ -385,11 +385,15 @@ void setup_serial_port(int baud)
 	/* enable rs485 direction control */
 	if (_cl_rs485_delay >= 0) {
 		struct serial_rs485 rs485;
-		rs485.flags = SER_RS485_ENABLED | SER_RS485_RTS_ON_SEND | SER_RS485_RTS_AFTER_SEND;
-		rs485.delay_rts_after_send = _cl_rs485_delay;
-		rs485.delay_rts_before_send = 0;
-		if(ioctl(_fd, TIOCSRS485, &rs485) < 0) {
-			printf("Error setting rs485 mode\n");
+		if(ioctl(_fd, TIOCGRS485, &rs485) < 0) {
+			printf("Error getting rs485 mode\n");
+		} else {
+			rs485.flags |= SER_RS485_ENABLED | SER_RS485_RTS_ON_SEND | SER_RS485_RTS_AFTER_SEND;
+			rs485.delay_rts_after_send = _cl_rs485_delay;
+			rs485.delay_rts_before_send = 0;
+			if(ioctl(_fd, TIOCSRS485, &rs485) < 0) {
+				printf("Error setting rs485 mode\n");
+			}
 		}
 	}
 }
