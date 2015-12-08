@@ -160,7 +160,7 @@ void process_options(int argc, char * argv[])
 {
 	for (;;) {
 		int option_index = 0;
-		static const char *short_options = "hb:p:d:R:TsSy:z:certlq:";
+		static const char *short_options = "hb:p:d:R:TsSy:z:certq:l:";
 		static const struct option long_options[] = {
 			{"help", no_argument, 0, 0},
 			{"baud", required_argument, 0, 'b'},
@@ -378,10 +378,17 @@ void setup_serial_port(int baud)
 	}
 }
 
-int diff_ms(struct timespec t1, struct timespec t2)
+int diff_ms(const struct timespec *t1, const struct timespec *t2)
 {
-    return (((t1.tv_sec - t2.tv_sec) * 1000) + 
-            (t1.tv_nsec - t2.tv_nsec))/1000000;
+	struct timespec diff;
+
+	diff.tv_sec = t1->tv_sec - t2->tv_sec;
+	diff.tv_nsec = t1->tv_nsec - t2->tv_nsec;
+	if (diff.tv_nsec < 0) {
+		diff.tv_sec--;
+		diff.tv_nsec += 1000000000;
+	}
+	return (diff.tv_sec * 1000 + diff.tv_nsec/1000000);
 }
 
 int main(int argc, char * argv[])
@@ -453,7 +460,7 @@ int main(int argc, char * argv[])
 					// since the last read
 					struct timespec current;
 					clock_gettime(CLOCK_MONOTONIC, &current);
-					if (diff_ms(current, last_read) > _cl_rx_delay) {
+					if (diff_ms(&current, &last_read) > _cl_rx_delay) {
 						process_read_data();
 						last_read = current;
 					}
