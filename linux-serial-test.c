@@ -13,6 +13,7 @@
 #include <getopt.h>
 #include <time.h>
 #include <linux/serial.h>
+#include <errno.h>
 
 // command line args
 int _cl_baud = 0;
@@ -30,6 +31,8 @@ int _cl_dump_err = 0;
 int _cl_no_rx = 0;
 int _cl_no_tx = 0;
 int _cl_rx_delay = 0;
+int _cl_tx_delay = 0;
+int _cl_tx_bytes = 0;
 int _cl_rs485_delay = -1;
 int _cl_tx_time = 0;
 int _cl_rx_time = 0;
@@ -38,6 +41,8 @@ int _cl_rx_time = 0;
 unsigned char _write_count_value = 0;
 unsigned char _read_count_value = 0;
 int _fd = -1;
+unsigned char * _write_data;
+ssize_t _write_size;
 
 // keep our own counts for cases where the driver stats don't work
 int _write_count = 0;
@@ -150,6 +155,9 @@ void display_help()
 			"                    when serial driver buffer is full\n"
 			"  -t, --no-tx       Don't transmit data\n"
 			"  -l, --rx-delay    Delay between reading data (ms) (can be used to test flow control)\n"
+			"  -a, --tx-delay    Delay between writing data (ms)\n"
+			"  -w, --tx-bytes    Number of bytes for each write (default is to repeatedly write 1024 bytes\n"
+			"                    until no more are accepted)\n"
 			"  -q, --rs485       Enable RS485 direction control on port, and set delay\n"
 			"                    from when TX is finished and RS485 driver enable is\n"
 			"                    de-asserted. Delay is specified in bit times.\n"
@@ -164,7 +172,7 @@ void process_options(int argc, char * argv[])
 {
 	for (;;) {
 		int option_index = 0;
-		static const char *short_options = "hb:p:d:R:TsSy:z:certq:l:o:i:";
+		static const char *short_options = "hb:p:d:R:TsSy:z:certq:l:a:w:o:i:";
 		static const struct option long_options[] = {
 			{"help", no_argument, 0, 0},
 			{"baud", required_argument, 0, 'b'},
@@ -181,6 +189,8 @@ void process_options(int argc, char * argv[])
 			{"no-rx", no_argument, 0, 'r'},
 			{"no-tx", no_argument, 0, 't'},
 			{"rx-delay", required_argument, 0, 'l'},
+			{"tx-delay", required_argument, 0, 'a'},
+			{"tx-bytes", required_argument, 0, 'w'},
 			{"rs485", required_argument, 0, 'q'},
 			{"tx-time", required_argument, 0, 'o'},
 			{"rx-time", required_argument, 0, 'i'},
@@ -248,6 +258,16 @@ void process_options(int argc, char * argv[])
 		case 'l': {
 			char *endptr;
 			_cl_rx_delay = strtol(optarg, &endptr, 0);
+			break;
+		}
+		case 'a': {
+			char *endptr;
+			_cl_tx_delay = strtol(optarg, &endptr, 0);
+			break;
+		}
+		case 'w': {
+			char *endptr;
+			_cl_tx_bytes = strtol(optarg, &endptr, 0);
 			break;
 		}
 		case 'q': {
@@ -318,32 +338,36 @@ void process_read_data()
 
 void process_write_data()
 {
-	int count = 0;
-	unsigned char write_data[1024] = {0};
+	ssize_t count = 0;
+	int repeat = (_cl_tx_bytes == 0);
 
-	while (1) {
-		int i;
-		for (i = 0; i < sizeof(write_data); i++) {
-			write_data[i] = _write_count_value;
+	do
+	{
+		ssize_t i;
+		for (i = 0; i < _write_size; i++) {
+			_write_data[i] = _write_count_value;
 			_write_count_value++;
 		}
 
-		int c = write(_fd, &write_data, sizeof(write_data));
+		ssize_t c = write(_fd, _write_data, _write_size);
 
-		if (c > 0) {
-			_write_count += c;
-			count += c;
+		if (c < 0) {
+			printf("write failed (%d)\n", errno);
+			c = 0;
 		}
 
-		if (c < sizeof(write_data)) {
-			_write_count_value -= sizeof(write_data) - c;
-			if (_cl_tx_detailed)
-				printf("wrote %i bytes\n", count);
-			break;
-		} else {
-			count += c;
+		count += c;
+
+		if (c < _write_size) {
+			_write_count_value -= _write_size - c;
+			repeat = 0;
 		}
-	}
+	} while (repeat);
+
+	_write_count += count;
+
+	if (_cl_tx_detailed)
+		printf("wrote %zd bytes\n", count);
 }
 
 
@@ -448,6 +472,13 @@ int main(int argc, char * argv[])
 		return 0;
 	}
 
+	_write_size = (_cl_tx_bytes == 0) ? 1024 : _cl_tx_bytes;
+
+	_write_data = malloc(_write_size);
+	if (_write_data == NULL) {
+		printf("ERROR: Memory allocation failed\n");
+	}
+
 	struct pollfd serial_poll;
 	serial_poll.fd = _fd;
 	if (!_cl_no_rx) {
@@ -464,6 +495,7 @@ int main(int argc, char * argv[])
 
 	struct timespec start_time, last_stat;
 	struct timespec last_read = { .tv_sec = 0, .tv_nsec = 0 };
+	struct timespec last_write = { .tv_sec = 0, .tv_nsec = 0 };
 
 	clock_gettime(CLOCK_MONOTONIC, &start_time);
 	last_stat = start_time;
@@ -490,7 +522,18 @@ int main(int argc, char * argv[])
 			}
 
 			if (serial_poll.revents & POLLOUT) {
-				process_write_data();
+				if (_cl_tx_delay) {
+					// only write if it has been tx-delay ms
+					// since the last write
+					struct timespec current;
+					clock_gettime(CLOCK_MONOTONIC, &current);
+					if (diff_ms(&current, &last_write) > _cl_tx_delay) {
+						process_write_data();
+						last_write = current;
+					}
+				} else {
+					process_write_data();
+				}
 			}
 		} else if (!(_cl_no_tx && _write_count != 0 && _write_count == _read_count)) {
 			// No data. We report this unless we are no longer

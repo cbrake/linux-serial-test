@@ -23,6 +23,9 @@ linux-serial-test
                         when serial driver buffer is full
       -t, --no-tx       Don't transmit data
       -l, --rx-delay    Delay between reading data (ms) (can be used to test flow control)
+      -a, --tx-delay    Delay between writing data (ms)
+      -w, --tx-bytes    Number of bytes for each write (default is to repeatedly write 1024 bytes
+                        until no more are accepted)
       -q, --rs485       Enable RS485 direction control on port, and set delay
                         from when TX is finished and RS485 driver enable is
                         de-asserted. Delay is specified in bit times.
