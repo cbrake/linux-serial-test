@@ -66,13 +66,13 @@ void dump_data_ascii(unsigned char * b, int count) {
 	}
 }
 
-int set_baud_divisor(int speed)
+void set_baud_divisor(int speed)
 {
 	// default baud was not found, so try to set a custom divisor
 	struct serial_struct ss;
 	if (ioctl(_fd, TIOCGSERIAL, &ss) != 0) {
 		printf("TIOCGSERIAL failed\n");
-		return -1;
+		exit(1);
 	}
 
 	ss.flags = (ss.flags & ~ASYNC_SPD_MASK) | ASYNC_SPD_CUST;
@@ -81,13 +81,16 @@ int set_baud_divisor(int speed)
 
 	if (closest_speed < speed * 98 / 100 || closest_speed > speed * 102 / 100) {
 		printf("Cannot set speed to %d, closest is %d\n", speed, closest_speed);
-		exit(-1);
+		exit(1);
 	}
 
 	printf("closest baud = %i, base = %i, divisor = %i\n", closest_speed, ss.baud_base,
 			ss.custom_divisor);
 
-	ioctl(_fd, TIOCSSERIAL, &ss);
+	if (ioctl(_fd, TIOCSSERIAL, &ss) < 0) {
+		printf("TIOCSSERIAL failed\n");
+		exit(1);
+	}
 }
 
 // converts integer baud to Linux define
@@ -291,7 +294,7 @@ void process_options(int argc, char * argv[])
 
 void dump_serial_port_stats()
 {
-	struct serial_icounter_struct icount = {};
+	struct serial_icounter_struct icount = { 0 };
 
 	printf("%s: count for this session: rx=%i, tx=%i, rx err=%i\n", _cl_port, _read_count, _write_count, _error_count);
 
@@ -326,7 +329,7 @@ void process_read_data()
 				_error_count++;
 				if (_cl_stop_on_error) {
 					dump_serial_port_stats();
-					exit(-1);
+					exit(1);
 				}
 				_read_count_value = rb[i];
 			}
@@ -380,7 +383,7 @@ void setup_serial_port(int baud)
 	if (_fd < 0) {
 		printf("Error opening serial port \n");
 		free(_cl_port);
-		exit(-1);
+		exit(1);
 	}
 
 	bzero(&newtio, sizeof(newtio)); /* clear struct for new port settings */
