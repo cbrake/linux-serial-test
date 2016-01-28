@@ -71,4 +71,4 @@ can be used as part of an automated test script.
 This outputs 10 bits that are easy to measure, and then multiply by 10
 in your head to get baud rate.
 
-See the measure-baud-rate-example.png file in this project for an example.
+![verify baud rate](https://github.com/cbrake/linux-serial-test/blob/master/measure-baud-rate-example.png)
