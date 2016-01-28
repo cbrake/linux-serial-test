@@ -13,6 +13,7 @@
 #include <getopt.h>
 #include <time.h>
 #include <linux/serial.h>
+#include <errno.h>
 
 // command line args
 int _cl_baud = 0;
@@ -30,12 +31,18 @@ int _cl_dump_err = 0;
 int _cl_no_rx = 0;
 int _cl_no_tx = 0;
 int _cl_rx_delay = 0;
+int _cl_tx_delay = 0;
+int _cl_tx_bytes = 0;
 int _cl_rs485_delay = -1;
+int _cl_tx_time = 0;
+int _cl_rx_time = 0;
 
 // Module variables
 unsigned char _write_count_value = 0;
 unsigned char _read_count_value = 0;
 int _fd = -1;
+unsigned char * _write_data;
+ssize_t _write_size;
 
 // keep our own counts for cases where the driver stats don't work
 int _write_count = 0;
@@ -59,13 +66,13 @@ void dump_data_ascii(unsigned char * b, int count) {
 	}
 }
 
-int set_baud_divisor(int speed)
+void set_baud_divisor(int speed)
 {
 	// default baud was not found, so try to set a custom divisor
 	struct serial_struct ss;
 	if (ioctl(_fd, TIOCGSERIAL, &ss) != 0) {
 		printf("TIOCGSERIAL failed\n");
-		return -1;
+		exit(1);
 	}
 
 	ss.flags = (ss.flags & ~ASYNC_SPD_MASK) | ASYNC_SPD_CUST;
@@ -74,13 +81,16 @@ int set_baud_divisor(int speed)
 
 	if (closest_speed < speed * 98 / 100 || closest_speed > speed * 102 / 100) {
 		printf("Cannot set speed to %d, closest is %d\n", speed, closest_speed);
-		exit(-1);
+		exit(1);
 	}
 
 	printf("closest baud = %i, base = %i, divisor = %i\n", closest_speed, ss.baud_base,
 			ss.custom_divisor);
 
-	ioctl(_fd, TIOCSSERIAL, &ss);
+	if (ioctl(_fd, TIOCSSERIAL, &ss) < 0) {
+		printf("TIOCSSERIAL failed\n");
+		exit(1);
+	}
 }
 
 // converts integer baud to Linux define
@@ -148,9 +158,14 @@ void display_help()
 			"                    when serial driver buffer is full\n"
 			"  -t, --no-tx       Don't transmit data\n"
 			"  -l, --rx-delay    Delay between reading data (ms) (can be used to test flow control)\n"
+			"  -a, --tx-delay    Delay between writing data (ms)\n"
+			"  -w, --tx-bytes    Number of bytes for each write (default is to repeatedly write 1024 bytes\n"
+			"                    until no more are accepted)\n"
 			"  -q, --rs485       Enable RS485 direction control on port, and set delay\n"
 			"                    from when TX is finished and RS485 driver enable is\n"
 			"                    de-asserted. Delay is specified in bit times.\n"
+			"  -o, --tx-time     Number of seconds to transmit for (defaults to 0, meaning no limit)\n"
+			"  -i, --rx-time     Number of seconds to receive for (defaults to 0, meaning no limit)\n"
 			"\n"
 	      );
 	exit(0);
@@ -160,7 +175,7 @@ void process_options(int argc, char * argv[])
 {
 	for (;;) {
 		int option_index = 0;
-		static const char *short_options = "hb:p:d:R:TsSy:z:certq:l:";
+		static const char *short_options = "hb:p:d:R:TsSy:z:certq:l:a:w:o:i:";
 		static const struct option long_options[] = {
 			{"help", no_argument, 0, 0},
 			{"baud", required_argument, 0, 'b'},
@@ -177,7 +192,11 @@ void process_options(int argc, char * argv[])
 			{"no-rx", no_argument, 0, 'r'},
 			{"no-tx", no_argument, 0, 't'},
 			{"rx-delay", required_argument, 0, 'l'},
+			{"tx-delay", required_argument, 0, 'a'},
+			{"tx-bytes", required_argument, 0, 'w'},
 			{"rs485", required_argument, 0, 'q'},
+			{"tx-time", required_argument, 0, 'o'},
+			{"rx-time", required_argument, 0, 'i'},
 			{0,0,0,0},
 		};
 
@@ -244,9 +263,29 @@ void process_options(int argc, char * argv[])
 			_cl_rx_delay = strtol(optarg, &endptr, 0);
 			break;
 		}
+		case 'a': {
+			char *endptr;
+			_cl_tx_delay = strtol(optarg, &endptr, 0);
+			break;
+		}
+		case 'w': {
+			char *endptr;
+			_cl_tx_bytes = strtol(optarg, &endptr, 0);
+			break;
+		}
 		case 'q': {
 			char *endptr;
 			_cl_rs485_delay = strtol(optarg, &endptr, 0);
+			break;
+		}
+		case 'o': {
+			char *endptr;
+			_cl_tx_time = strtol(optarg, &endptr, 0);
+			break;
+		}
+		case 'i': {
+			char *endptr;
+			_cl_rx_time = strtol(optarg, &endptr, 0);
 			break;
 		}
 		}
@@ -255,7 +294,7 @@ void process_options(int argc, char * argv[])
 
 void dump_serial_port_stats()
 {
-	struct serial_icounter_struct icount = {};
+	struct serial_icounter_struct icount = { 0 };
 
 	printf("%s: count for this session: rx=%i, tx=%i, rx err=%i\n", _cl_port, _read_count, _write_count, _error_count);
 
@@ -290,7 +329,7 @@ void process_read_data()
 				_error_count++;
 				if (_cl_stop_on_error) {
 					dump_serial_port_stats();
-					exit(-1);
+					exit(1);
 				}
 				_read_count_value = rb[i];
 			}
@@ -302,32 +341,36 @@ void process_read_data()
 
 void process_write_data()
 {
-	int count = 0;
-	unsigned char write_data[1024] = {0};
+	ssize_t count = 0;
+	int repeat = (_cl_tx_bytes == 0);
 
-	while (1) {
-		int i;
-		for (i = 0; i < sizeof(write_data); i++) {
-			write_data[i] = _write_count_value;
+	do
+	{
+		ssize_t i;
+		for (i = 0; i < _write_size; i++) {
+			_write_data[i] = _write_count_value;
 			_write_count_value++;
 		}
 
-		int c = write(_fd, &write_data, sizeof(write_data));
+		ssize_t c = write(_fd, _write_data, _write_size);
 
-		if (c > 0) {
-			_write_count += c;
-			count += c;
+		if (c < 0) {
+			printf("write failed (%d)\n", errno);
+			c = 0;
 		}
 
-		if (c < sizeof(write_data)) {
-			_write_count_value -= sizeof(write_data) - c;
-			if (_cl_tx_detailed)
-				printf("wrote %i bytes\n", count);
-			break;
-		} else {
-			count += c;
+		count += c;
+
+		if (c < _write_size) {
+			_write_count_value -= _write_size - c;
+			repeat = 0;
 		}
-	}
+	} while (repeat);
+
+	_write_count += count;
+
+	if (_cl_tx_detailed)
+		printf("wrote %zd bytes\n", count);
 }
 
 
@@ -340,7 +383,7 @@ void setup_serial_port(int baud)
 	if (_fd < 0) {
 		printf("Error opening serial port \n");
 		free(_cl_port);
-		exit(-1);
+		exit(1);
 	}
 
 	bzero(&newtio, sizeof(newtio)); /* clear struct for new port settings */
@@ -363,17 +406,21 @@ void setup_serial_port(int baud)
 	newtio.c_cc[VTIME] = 5;
 
 	/* now clean the modem line and activate the settings for the port */
-	tcflush(_fd, TCIFLUSH);
+	tcflush(_fd, TCIOFLUSH);
 	tcsetattr(_fd,TCSANOW,&newtio);
 
 	/* enable rs485 direction control */
 	if (_cl_rs485_delay >= 0) {
 		struct serial_rs485 rs485;
-		rs485.flags = SER_RS485_ENABLED | SER_RS485_RTS_ON_SEND | SER_RS485_RTS_AFTER_SEND;
-		rs485.delay_rts_after_send = _cl_rs485_delay;
-		rs485.delay_rts_before_send = 0;
-		if(ioctl(_fd, TIOCSRS485, &rs485) < 0) {
-			printf("Error setting rs485 mode\n");
+		if(ioctl(_fd, TIOCGRS485, &rs485) < 0) {
+			printf("Error getting rs485 mode\n");
+		} else {
+			rs485.flags |= SER_RS485_ENABLED | SER_RS485_RTS_ON_SEND | SER_RS485_RTS_AFTER_SEND;
+			rs485.delay_rts_after_send = _cl_rs485_delay;
+			rs485.delay_rts_before_send = 0;
+			if(ioctl(_fd, TIOCSRS485, &rs485) < 0) {
+				printf("Error setting rs485 mode\n");
+			}
 		}
 	}
 }
@@ -428,6 +475,13 @@ int main(int argc, char * argv[])
 		return 0;
 	}
 
+	_write_size = (_cl_tx_bytes == 0) ? 1024 : _cl_tx_bytes;
+
+	_write_data = malloc(_write_size);
+	if (_write_data == NULL) {
+		printf("ERROR: Memory allocation failed\n");
+	}
+
 	struct pollfd serial_poll;
 	serial_poll.fd = _fd;
 	if (!_cl_no_rx) {
@@ -442,14 +496,15 @@ int main(int argc, char * argv[])
 		serial_poll.events &= ~POLLOUT;
 	}
 
-	struct timespec last_stat;
-	struct timespec last_read;
+	struct timespec start_time, last_stat;
+	struct timespec last_read = { .tv_sec = 0, .tv_nsec = 0 };
+	struct timespec last_write = { .tv_sec = 0, .tv_nsec = 0 };
 
-	clock_gettime(CLOCK_MONOTONIC, &last_stat);
-	clock_gettime(CLOCK_MONOTONIC, &last_read);
+	clock_gettime(CLOCK_MONOTONIC, &start_time);
+	last_stat = start_time;
 
-	while (1) {
-		int retval = poll(&serial_poll, 1, 10000);
+	while (!(_cl_no_rx && _cl_no_tx)) {
+		int retval = poll(&serial_poll, 1, 1000);
 
 		if (retval == -1) {
 			perror("poll()");
@@ -470,22 +525,62 @@ int main(int argc, char * argv[])
 			}
 
 			if (serial_poll.revents & POLLOUT) {
-				process_write_data();
+				if (_cl_tx_delay) {
+					// only write if it has been tx-delay ms
+					// since the last write
+					struct timespec current;
+					clock_gettime(CLOCK_MONOTONIC, &current);
+					if (diff_ms(&current, &last_write) > _cl_tx_delay) {
+						process_write_data();
+						last_write = current;
+					}
+				} else {
+					process_write_data();
+				}
 			}
-		} else {
-			printf("No data within ten seconds.\n");
+		} else if (!(_cl_no_tx && _write_count != 0 && _write_count == _read_count)) {
+			// No data. We report this unless we are no longer
+			// transmitting and the receive count equals the
+			// transmit count, suggesting a loopback test that has
+			// finished.
+			printf("No data within one second.\n");
 		}
 
-		if (_cl_stats) {
+		if (_cl_stats || _cl_tx_time || _cl_rx_time) {
 			struct timespec current;
 			clock_gettime(CLOCK_MONOTONIC, &current);
-			if (current.tv_sec - last_stat.tv_sec > 5) {
-				dump_serial_port_stats();
-				last_stat = current;
+
+			if (_cl_stats) {
+				if (current.tv_sec - last_stat.tv_sec > 5) {
+					dump_serial_port_stats();
+					last_stat = current;
+				}
+			}
+			if (_cl_tx_time) {
+				if (current.tv_sec - start_time.tv_sec >= _cl_tx_time) {
+					_cl_tx_time = 0;
+					_cl_no_tx = 1;
+					serial_poll.events &= ~POLLOUT;
+					printf("Stopped transmitting.\n");
+				}
+			}
+			if (_cl_rx_time) {
+				if (current.tv_sec - start_time.tv_sec >= _cl_rx_time) {
+					_cl_rx_time = 0;
+					_cl_no_rx = 1;
+					serial_poll.events &= ~POLLIN;
+					printf("Stopped receiving.\n");
+				}
 			}
 		}
 	}
+
+	tcdrain(_fd);
+	dump_serial_port_stats();
+	tcflush(_fd, TCIOFLUSH);
 	free(_cl_port);
+
+	int result = abs(_write_count - _read_count) + _error_count;
+
+	return (result > 255) ? 255 : result;
 }
-
-

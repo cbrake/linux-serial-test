@@ -23,9 +23,14 @@ linux-serial-test
                         when serial driver buffer is full
       -t, --no-tx       Don't transmit data
       -l, --rx-delay    Delay between reading data (ms) (can be used to test flow control)
+      -a, --tx-delay    Delay between writing data (ms)
+      -w, --tx-bytes    Number of bytes for each write (default is to repeatedly write 1024 bytes
+                        until no more are accepted)
       -q, --rs485       Enable RS485 direction control on port, and set delay
                         from when TX is finished and RS485 driver enable is
                         de-asserted. Delay is specified in bit times.
+      -o, --tx-time     Number of seconds to transmit for (defaults to 0, meaning no limit)
+      -i, --rx-time     Number of seconds to receive for (defaults to 0, meaning no limit)
 
 # Examples
 
@@ -49,6 +54,15 @@ reported, and if flow control is working correctly there should be none.
 
 This test can be done using a loopback cable, or by running the program on both
 ends of the connection.
+
+## Stress test that can be used in a script
+
+    linux-serial-test -s -e -p /dev/ttyO0 -b 115200 -o 5 -i 7
+
+This transmits for five seconds and receives for seven seconds, after which it
+will exit. The exit code will be zero if the number of received bytes matched
+the number of transmitted bytes and the received pattern was correct, so this
+can be used as part of an automated test script.
 
 ## Output a pattern where you can easily verify baud rate with scope:
 
