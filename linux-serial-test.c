@@ -27,6 +27,10 @@ int _cl_stop_on_error = 0;
 int _cl_single_byte = -1;
 int _cl_another_byte = -1;
 int _cl_rts_cts = 0;
+int _cl_2_stop_bit = 0;
+int _cl_parity = 0;
+int _cl_odd_parity = 0;
+int _cl_stick_parity = 0;
 int _cl_dump_err = 0;
 int _cl_no_rx = 0;
 int _cl_no_tx = 0;
@@ -153,6 +157,8 @@ void display_help()
 			"  -y, --single-byte Send specified byte to the serial port\n"
 			"  -z, --second-byte Send another specified byte to the serial port\n"
 			"  -c, --rts-cts     Enable RTS/CTS flow control\n"
+			"  -B, --2-stop-bit  Use two stop bits per character\n"
+			"  -P, --parity      Use parity bit (odd, even, mark, space)\n"
 			"  -e, --dump-err    Display errors\n"
 			"  -r, --no-rx       Don't receive data (can be used to test flow control)\n"
 			"                    when serial driver buffer is full\n"
@@ -175,7 +181,7 @@ void process_options(int argc, char * argv[])
 {
 	for (;;) {
 		int option_index = 0;
-		static const char *short_options = "hb:p:d:R:TsSy:z:certq:l:a:w:o:i:";
+		static const char *short_options = "hb:p:d:R:TsSy:z:cBertq:l:a:w:o:i:P:";
 		static const struct option long_options[] = {
 			{"help", no_argument, 0, 0},
 			{"baud", required_argument, 0, 'b'},
@@ -188,6 +194,8 @@ void process_options(int argc, char * argv[])
 			{"single-byte", no_argument, 0, 'y'},
 			{"second-byte", no_argument, 0, 'z'},
 			{"rts-cts", no_argument, 0, 'c'},
+			{"2-stop-bit", no_argument, 0, 'B'},
+			{"parity", required_argument, 0, 'P'},
 			{"dump-err", no_argument, 0, 'e'},
 			{"no-rx", no_argument, 0, 'r'},
 			{"no-tx", no_argument, 0, 't'},
@@ -248,6 +256,14 @@ void process_options(int argc, char * argv[])
 		}
 		case 'c':
 			_cl_rts_cts = 1;
+			break;
+		case 'B':
+			_cl_2_stop_bit = 1;
+			break;
+		case 'P':
+			_cl_parity = 1;
+			_cl_odd_parity = (!strcmp(optarg, "mark")||!strcmp(optarg, "odd"));
+			_cl_stick_parity = (!strcmp(optarg, "mark")||!strcmp(optarg, "space"));
 			break;
 		case 'e':
 			_cl_dump_err = 1;
@@ -393,6 +409,20 @@ void setup_serial_port(int baud)
 
 	if (_cl_rts_cts) {
 		newtio.c_cflag |= CRTSCTS;
+	}
+
+	if (_cl_2_stop_bit) {
+		newtio.c_cflag |= CSTOPB;
+	}
+
+	if (_cl_parity) {
+		newtio.c_cflag |= PARENB;
+		if (_cl_odd_parity) {
+			newtio.c_cflag |= PARODD;
+		}
+		if (_cl_stick_parity) {
+			newtio.c_cflag |= CMSPAR;
+		}
 	}
 
 	newtio.c_iflag = 0;
