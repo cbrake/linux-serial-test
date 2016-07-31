@@ -18,6 +18,8 @@ linux-serial-test
       -y, --single-byte Send specified byte to the serial port
       -z, --second-byte Send another specified byte to the serial port
       -c, --rts-cts     Enable RTS/CTS flow control
+      -B, --2-stop-bit  Use two stop bits per character
+      -P, --parity      Use parity bit (odd, even, mark, space)
       -e, --dump-err    Display errors
       -r, --no-rx       Don't receive data (can be used to test flow control)
                         when serial driver buffer is full
