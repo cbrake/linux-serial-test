@@ -49,9 +49,9 @@ unsigned char * _write_data;
 ssize_t _write_size;
 
 // keep our own counts for cases where the driver stats don't work
-int _write_count = 0;
-int _read_count = 0;
-int _error_count = 0;
+long long int _write_count = 0;
+long long int _read_count = 0;
+long long int _error_count = 0;
 
 static void dump_data(unsigned char * b, int count)
 {
@@ -312,7 +312,7 @@ static void dump_serial_port_stats(void)
 {
 	struct serial_icounter_struct icount = { 0 };
 
-	printf("%s: count for this session: rx=%i, tx=%i, rx err=%i\n", _cl_port, _read_count, _write_count, _error_count);
+	printf("%s: count for this session: rx=%lld, tx=%lld, rx err=%lld\n", _cl_port, _read_count, _write_count, _error_count);
 
 	int ret = ioctl(_fd, TIOCGICOUNT, &icount);
 	if (ret != -1) {
@@ -339,7 +339,7 @@ static void process_read_data(void)
 		for (i = 0; i < c; i++) {
 			if (rb[i] != _read_count_value) {
 				if (_cl_dump_err) {
-					printf("Error, count: %i, expected %02x, got %02x\n",
+					printf("Error, count: %lld, expected %02x, got %02x\n",
 							_read_count + i, _read_count_value, rb[i]);
 				}
 				_error_count++;
@@ -622,7 +622,7 @@ int main(int argc, char * argv[])
 	tcflush(_fd, TCIOFLUSH);
 	free(_cl_port);
 
-	int result = abs(_write_count - _read_count) + _error_count;
+	long long int result = llabs(_write_count - _read_count) + _error_count;
 
-	return (result > 125) ? 125 : result;
+	return (result > 125) ? 125 : (int)result;
 }
