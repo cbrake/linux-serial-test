@@ -538,15 +538,20 @@ int main(int argc, char * argv[])
 		serial_poll.events &= ~POLLOUT;
 	}
 
-	struct timespec start_time, last_stat;
-	struct timespec last_read = { .tv_sec = 0, .tv_nsec = 0 };
-	struct timespec last_write = { .tv_sec = 0, .tv_nsec = 0 };
+	struct timespec start_time, last_stat, last_timeout, last_read, last_write;
 
 	clock_gettime(CLOCK_MONOTONIC, &start_time);
 	last_stat = start_time;
+	last_timeout = start_time;
+	last_read = start_time;
+	last_write = start_time;
 
 	while (!(_cl_no_rx && _cl_no_tx)) {
+		struct timespec current;
+		int rx_timeout, tx_timeout;
 		int retval = poll(&serial_poll, 1, 1000);
+
+		clock_gettime(CLOCK_MONOTONIC, &current);
 
 		if (retval == -1) {
 			perror("poll()");
@@ -555,14 +560,13 @@ int main(int argc, char * argv[])
 				if (_cl_rx_delay) {
 					// only read if it has been rx-delay ms
 					// since the last read
-					struct timespec current;
-					clock_gettime(CLOCK_MONOTONIC, &current);
 					if (diff_ms(&current, &last_read) > _cl_rx_delay) {
 						process_read_data();
 						last_read = current;
 					}
 				} else {
 					process_read_data();
+					last_read = current;
 				}
 			}
 
@@ -570,49 +574,70 @@ int main(int argc, char * argv[])
 				if (_cl_tx_delay) {
 					// only write if it has been tx-delay ms
 					// since the last write
-					struct timespec current;
-					clock_gettime(CLOCK_MONOTONIC, &current);
 					if (diff_ms(&current, &last_write) > _cl_tx_delay) {
 						process_write_data();
 						last_write = current;
 					}
 				} else {
 					process_write_data();
+					last_write = current;
 				}
 			}
-		} else if (!(_cl_no_tx && _write_count != 0 && _write_count == _read_count)) {
-			// No data. We report this unless we are no longer
-			// transmitting and the receive count equals the
-			// transmit count, suggesting a loopback test that has
-			// finished.
-			printf("No data within one second.\n");
 		}
 
-		if (_cl_stats || _cl_tx_time || _cl_rx_time) {
-			struct timespec current;
-			clock_gettime(CLOCK_MONOTONIC, &current);
+		// Has it been at least a second since we reported a timeout?
+		if (diff_ms(&current, &last_timeout) > 1000) {
+			// Has it been over two seconds since we transmitted or received data?
+			rx_timeout = (!_cl_no_rx && diff_ms(&current, &last_read) > 2000);
+			tx_timeout = (!_cl_no_tx && diff_ms(&current, &last_write) > 2000);
+			// Special case - we don't want to warn about receive
+			// timeouts at the end of a loopback test (where we are
+			// no longer transmitting and the receive count equals
+			// the transmit count).
+			if (_cl_no_tx && _write_count != 0 && _write_count == _read_count) {
+				rx_timeout = 0;
+			}
 
-			if (_cl_stats) {
-				if (current.tv_sec - last_stat.tv_sec > 5) {
-					dump_serial_port_stats();
-					last_stat = current;
+			if (rx_timeout || tx_timeout) {
+				const char *s;
+				if (rx_timeout) {
+					printf("No data received for %.1fs.",
+					       (double)diff_ms(&current, &last_read) / 1000);
+					s = " ";
+				} else {
+					s = "";
 				}
+				if (tx_timeout) {
+					printf("%sNo data transmitted for %.1fs.",
+					       s, (double)diff_ms(&current, &last_write) / 1000);
+				}
+				printf("\n");
+				last_timeout = current;
 			}
-			if (_cl_tx_time) {
-				if (current.tv_sec - start_time.tv_sec >= _cl_tx_time) {
-					_cl_tx_time = 0;
-					_cl_no_tx = 1;
-					serial_poll.events &= ~POLLOUT;
-					printf("Stopped transmitting.\n");
-				}
+		}
+
+		if (_cl_stats) {
+			if (current.tv_sec - last_stat.tv_sec > 5) {
+				dump_serial_port_stats();
+				last_stat = current;
 			}
-			if (_cl_rx_time) {
-				if (current.tv_sec - start_time.tv_sec >= _cl_rx_time) {
-					_cl_rx_time = 0;
-					_cl_no_rx = 1;
-					serial_poll.events &= ~POLLIN;
-					printf("Stopped receiving.\n");
-				}
+		}
+
+		if (_cl_tx_time) {
+			if (current.tv_sec - start_time.tv_sec >= _cl_tx_time) {
+				_cl_tx_time = 0;
+				_cl_no_tx = 1;
+				serial_poll.events &= ~POLLOUT;
+				printf("Stopped transmitting.\n");
+			}
+		}
+
+		if (_cl_rx_time) {
+			if (current.tv_sec - start_time.tv_sec >= _cl_rx_time) {
+				_cl_rx_time = 0;
+				_cl_no_rx = 1;
+				serial_poll.events &= ~POLLIN;
+				printf("Stopped receiving.\n");
 			}
 		}
 	}
