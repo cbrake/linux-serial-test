@@ -53,7 +53,8 @@ int _write_count = 0;
 int _read_count = 0;
 int _error_count = 0;
 
-void dump_data(unsigned char * b, int count) {
+static void dump_data(unsigned char * b, int count)
+{
 	printf("%i bytes: ", count);
 	int i;
 	for (i=0; i < count; i++) {
@@ -63,14 +64,15 @@ void dump_data(unsigned char * b, int count) {
 	printf("\n");
 }
 
-void dump_data_ascii(unsigned char * b, int count) {
+static void dump_data_ascii(unsigned char * b, int count)
+{
 	int i;
 	for (i=0; i < count; i++) {
 		printf("%c", b[i]);
 	}
 }
 
-void set_baud_divisor(int speed)
+static void set_baud_divisor(int speed)
 {
 	// default baud was not found, so try to set a custom divisor
 	struct serial_struct ss;
@@ -98,7 +100,7 @@ void set_baud_divisor(int speed)
 }
 
 // converts integer baud to Linux define
-int get_baud(int baud)
+static int get_baud(int baud)
 {
 	switch (baud) {
 	case 9600:
@@ -142,7 +144,7 @@ int get_baud(int baud)
 	}
 }
 
-void display_help()
+static void display_help(void)
 {
 	printf("Usage: linux-serial-test [OPTION]\n"
 			"\n"
@@ -177,7 +179,7 @@ void display_help()
 	exit(0);
 }
 
-void process_options(int argc, char * argv[])
+static void process_options(int argc, char * argv[])
 {
 	for (;;) {
 		int option_index = 0;
@@ -308,7 +310,7 @@ void process_options(int argc, char * argv[])
 	}
 }
 
-void dump_serial_port_stats()
+static void dump_serial_port_stats(void)
 {
 	struct serial_icounter_struct icount = { 0 };
 
@@ -322,7 +324,7 @@ void dump_serial_port_stats()
 	}
 }
 
-void process_read_data()
+static void process_read_data(void)
 {
 	unsigned char rb[1024];
 	int c = read(_fd, &rb, sizeof(rb));
@@ -355,7 +357,7 @@ void process_read_data()
 	}
 }
 
-void process_write_data()
+static void process_write_data(void)
 {
 	ssize_t count = 0;
 	int repeat = (_cl_tx_bytes == 0);
@@ -390,7 +392,7 @@ void process_write_data()
 }
 
 
-void setup_serial_port(int baud)
+static void setup_serial_port(int baud)
 {
 	struct termios newtio;
 
@@ -455,7 +457,7 @@ void setup_serial_port(int baud)
 	}
 }
 
-int diff_ms(const struct timespec *t1, const struct timespec *t2)
+static int diff_ms(const struct timespec *t1, const struct timespec *t2)
 {
 	struct timespec diff;
 
