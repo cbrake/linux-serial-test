@@ -76,8 +76,8 @@ static void set_baud_divisor(int speed)
 {
 	// default baud was not found, so try to set a custom divisor
 	struct serial_struct ss;
-	if (ioctl(_fd, TIOCGSERIAL, &ss) != 0) {
-		printf("TIOCGSERIAL failed\n");
+	if (ioctl(_fd, TIOCGSERIAL, &ss) < 0) {
+		perror("TIOCGSERIAL failed");
 		exit(1);
 	}
 
@@ -86,7 +86,7 @@ static void set_baud_divisor(int speed)
 	int closest_speed = ss.baud_base / ss.custom_divisor;
 
 	if (closest_speed < speed * 98 / 100 || closest_speed > speed * 102 / 100) {
-		printf("Cannot set speed to %d, closest is %d\n", speed, closest_speed);
+		fprintf(stderr, "Cannot set speed to %d, closest is %d\n", speed, closest_speed);
 		exit(1);
 	}
 
@@ -94,7 +94,7 @@ static void set_baud_divisor(int speed)
 			ss.custom_divisor);
 
 	if (ioctl(_fd, TIOCSSERIAL, &ss) < 0) {
-		printf("TIOCSSERIAL failed\n");
+		perror("TIOCSSERIAL failed");
 		exit(1);
 	}
 }
@@ -176,7 +176,6 @@ static void display_help(void)
 			"  -i, --rx-time     Number of seconds to receive for (defaults to 0, meaning no limit)\n"
 			"\n"
 	      );
-	exit(0);
 }
 
 static void process_options(int argc, char * argv[])
@@ -219,10 +218,9 @@ static void process_options(int argc, char * argv[])
 
 		switch (c) {
 		case 0:
-			display_help();
-			break;
 		case 'h':
 			display_help();
+			exit(0);
 			break;
 		case 'b':
 			_cl_baud = atoi(optarg);
@@ -373,7 +371,9 @@ static void process_write_data(void)
 		ssize_t c = write(_fd, _write_data, _write_size);
 
 		if (c < 0) {
-			printf("write failed (%d)\n", errno);
+			if (errno != EAGAIN) {
+				printf("write failed - errno=%d (%s)\n", errno, strerror(errno));
+			}
 			c = 0;
 		}
 
@@ -399,7 +399,7 @@ static void setup_serial_port(int baud)
 	_fd = open(_cl_port, O_RDWR | O_NONBLOCK);
 
 	if (_fd < 0) {
-		printf("Error opening serial port \n");
+		perror("Error opening serial port");
 		free(_cl_port);
 		exit(1);
 	}
@@ -445,13 +445,13 @@ static void setup_serial_port(int baud)
 	if (_cl_rs485_delay >= 0) {
 		struct serial_rs485 rs485;
 		if(ioctl(_fd, TIOCGRS485, &rs485) < 0) {
-			printf("Error getting rs485 mode\n");
+			perror("Error getting RS-485 mode");
 		} else {
 			rs485.flags |= SER_RS485_ENABLED | SER_RS485_RTS_ON_SEND | SER_RS485_RTS_AFTER_SEND;
 			rs485.delay_rts_after_send = _cl_rs485_delay;
 			rs485.delay_rts_before_send = 0;
 			if(ioctl(_fd, TIOCSRS485, &rs485) < 0) {
-				printf("Error setting rs485 mode\n");
+				perror("Error setting RS-485 mode");
 			}
 		}
 	}
@@ -477,8 +477,9 @@ int main(int argc, char * argv[])
 	process_options(argc, argv);
 
 	if (!_cl_port) {
-		printf("ERROR: Port argument required\n");
+		fprintf(stderr, "ERROR: Port argument required\n");
 		display_help();
+		return 1;
 	}
 
 	int baud = B115200;
@@ -497,12 +498,20 @@ int main(int argc, char * argv[])
 
 	if (_cl_single_byte >= 0) {
 		unsigned char data[2];
+		int bytes = 1;
+		int written;
 		data[0] = (unsigned char)_cl_single_byte;
-		if (_cl_another_byte < 0) {
-			write(_fd, &data, 1);
-		} else {
-			data[1] = _cl_another_byte;
-			write(_fd, &data, 2);
+		if (_cl_another_byte >= 0) {
+			data[1] = (unsigned char)_cl_another_byte;
+			bytes++;
+		}
+		written = write(_fd, &data, bytes);
+		if (written < 0) {
+			perror("write()");
+			return 1;
+		} else if (written != bytes) {
+			fprintf(stderr, "ERROR: write() returned %d, not %d\n", written, bytes);
+			return 1;
 		}
 		return 0;
 	}
@@ -511,7 +520,8 @@ int main(int argc, char * argv[])
 
 	_write_data = malloc(_write_size);
 	if (_write_data == NULL) {
-		printf("ERROR: Memory allocation failed\n");
+		fprintf(stderr, "ERROR: Memory allocation failed\n");
+		return 1;
 	}
 
 	struct pollfd serial_poll;
@@ -614,5 +624,5 @@ int main(int argc, char * argv[])
 
 	int result = abs(_write_count - _read_count) + _error_count;
 
-	return (result > 255) ? 255 : result;
+	return (result > 125) ? 125 : result;
 }
