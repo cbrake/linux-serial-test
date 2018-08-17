@@ -40,6 +40,7 @@ int _cl_tx_bytes = 0;
 int _cl_rs485_delay = -1;
 int _cl_tx_time = 0;
 int _cl_rx_time = 0;
+int _cl_ascii_range = 0;
 
 // Module variables
 unsigned char _write_count_value = 0;
@@ -174,6 +175,7 @@ static void display_help(void)
 			"                    de-asserted. Delay is specified in bit times.\n"
 			"  -o, --tx-time     Number of seconds to transmit for (defaults to 0, meaning no limit)\n"
 			"  -i, --rx-time     Number of seconds to receive for (defaults to 0, meaning no limit)\n"
+			"  -A, --ascii       Output bytes range from 32 to 126 (default is 0 to 255)\n"
 			"\n"
 	      );
 }
@@ -182,7 +184,7 @@ static void process_options(int argc, char * argv[])
 {
 	for (;;) {
 		int option_index = 0;
-		static const char *short_options = "hb:p:d:R:TsSy:z:cBertq:l:a:w:o:i:P:";
+		static const char *short_options = "hb:p:d:R:TsSy:z:cBertq:l:a:w:o:i:P:A";
 		static const struct option long_options[] = {
 			{"help", no_argument, 0, 0},
 			{"baud", required_argument, 0, 'b'},
@@ -206,6 +208,7 @@ static void process_options(int argc, char * argv[])
 			{"rs485", required_argument, 0, 'q'},
 			{"tx-time", required_argument, 0, 'o'},
 			{"rx-time", required_argument, 0, 'i'},
+			{"ascii-range", no_argument, 0, 'A'},
 			{0,0,0,0},
 		};
 
@@ -304,6 +307,9 @@ static void process_options(int argc, char * argv[])
 			_cl_rx_time = strtol(optarg, &endptr, 0);
 			break;
 		}
+		case 'A':
+			_cl_ascii_range = 1;
+			break;
 		}
 	}
 }
@@ -320,6 +326,14 @@ static void dump_serial_port_stats(void)
 				_cl_port, ret, icount.rx, icount.tx, icount.frame, icount.overrun, icount.parity, icount.brk,
 				icount.buf_overrun);
 	}
+}
+
+static unsigned char next_count_value(unsigned char c)
+{
+	c++;
+	if (_cl_ascii_range && c == 127)
+		c = 32;
+	return c;
 }
 
 static void process_read_data(void)
@@ -349,7 +363,7 @@ static void process_read_data(void)
 				}
 				_read_count_value = rb[i];
 			}
-			_read_count_value++;
+			_read_count_value = next_count_value(_read_count_value);
 		}
 		_read_count += c;
 	}
@@ -365,7 +379,7 @@ static void process_write_data(void)
 		ssize_t i;
 		for (i = 0; i < _write_size; i++) {
 			_write_data[i] = _write_count_value;
-			_write_count_value++;
+			_write_count_value = next_count_value(_write_count_value);
 		}
 
 		ssize_t c = write(_fd, _write_data, _write_size);
@@ -380,7 +394,7 @@ static void process_write_data(void)
 		count += c;
 
 		if (c < _write_size) {
-			_write_count_value -= _write_size - c;
+			_write_count_value = _write_data[c];
 			repeat = 0;
 		}
 	} while (repeat);
@@ -522,6 +536,10 @@ int main(int argc, char * argv[])
 	if (_write_data == NULL) {
 		fprintf(stderr, "ERROR: Memory allocation failed\n");
 		return 1;
+	}
+
+	if (_cl_ascii_range) {
+		_read_count_value = _write_count_value = 32;
 	}
 
 	struct pollfd serial_poll;
