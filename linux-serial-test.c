@@ -208,7 +208,7 @@ static void process_options(int argc, char * argv[])
 			{"rs485", required_argument, 0, 'q'},
 			{"tx-time", required_argument, 0, 'o'},
 			{"rx-time", required_argument, 0, 'i'},
-			{"ascii-range", no_argument, 0, 'A'},
+			{"ascii", no_argument, 0, 'A'},
 			{0,0,0,0},
 		};
 
