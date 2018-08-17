@@ -33,6 +33,7 @@ linux-serial-test
                         de-asserted. Delay is specified in bit times.
       -o, --tx-time     Number of seconds to transmit for (defaults to 0, meaning no limit)
       -i, --rx-time     Number of seconds to receive for (defaults to 0, meaning no limit)
+      -A, --ascii       Output bytes range from 32 to 126 (default is 0 to 255)
 
 # Examples
 
