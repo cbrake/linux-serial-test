@@ -409,6 +409,7 @@ static void process_write_data(void)
 static void setup_serial_port(int baud)
 {
 	struct termios newtio;
+	struct serial_rs485 rs485;
 
 	_fd = open(_cl_port, O_RDWR | O_NONBLOCK);
 
@@ -455,18 +456,25 @@ static void setup_serial_port(int baud)
 	tcflush(_fd, TCIOFLUSH);
 	tcsetattr(_fd,TCSANOW,&newtio);
 
-	/* enable rs485 direction control */
-	if (_cl_rs485_delay >= 0) {
-		struct serial_rs485 rs485;
-		if(ioctl(_fd, TIOCGRS485, &rs485) < 0) {
+	/* enable/disable rs485 direction control */
+	if(ioctl(_fd, TIOCGRS485, &rs485) < 0) {
+		if (_cl_rs485_delay >= 0) {
+			/* error could be because hardware is missing rs485 support so only print when actually trying to activate it */
 			perror("Error getting RS-485 mode");
-		} else {
-			rs485.flags |= SER_RS485_ENABLED | SER_RS485_RTS_ON_SEND | SER_RS485_RTS_AFTER_SEND;
-			rs485.delay_rts_after_send = _cl_rs485_delay;
-			rs485.delay_rts_before_send = 0;
-			if(ioctl(_fd, TIOCSRS485, &rs485) < 0) {
-				perror("Error setting RS-485 mode");
-			}
+		}
+	} else if (_cl_rs485_delay >= 0) {
+		rs485.flags |= SER_RS485_ENABLED | SER_RS485_RTS_ON_SEND | SER_RS485_RTS_AFTER_SEND;
+		rs485.delay_rts_after_send = _cl_rs485_delay;
+		rs485.delay_rts_before_send = 0;
+		if(ioctl(_fd, TIOCSRS485, &rs485) < 0) {
+			perror("Error setting RS-485 mode");
+		}
+	} else {
+		rs485.flags &= ~(SER_RS485_ENABLED | SER_RS485_RTS_ON_SEND | SER_RS485_RTS_AFTER_SEND);
+		rs485.delay_rts_after_send = 0;
+		rs485.delay_rts_before_send = 0;
+		if(ioctl(_fd, TIOCSRS485, &rs485) < 0) {
+			perror("Error setting RS-232 mode");
 		}
 	}
 }
