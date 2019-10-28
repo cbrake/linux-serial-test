@@ -574,7 +574,6 @@ int main(int argc, char * argv[])
 
 	while (!(_cl_no_rx && _cl_no_tx)) {
 		struct timespec current;
-		int rx_timeout, tx_timeout;
 		int retval = poll(&serial_poll, 1, 1000);
 
 		clock_gettime(CLOCK_MONOTONIC, &current);
@@ -613,6 +612,8 @@ int main(int argc, char * argv[])
 
 		// Has it been at least a second since we reported a timeout?
 		if (diff_ms(&current, &last_timeout) > 1000) {
+			int rx_timeout, tx_timeout;
+
 			// Has it been over two seconds since we transmitted or received data?
 			rx_timeout = (!_cl_no_rx && diff_ms(&current, &last_read) > 2000);
 			tx_timeout = (!_cl_no_tx && diff_ms(&current, &last_write) > 2000);
