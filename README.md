@@ -56,7 +56,14 @@ and start using flow control. As before any missing data in the pattern is
 reported, and if flow control is working correctly there should be none.
 
 This test can be done using a loopback cable, or by running the program on both
-ends of the connection.
+ends of the connection. For a two-port solution invoke the following command on
+the receiver side:
+
+    linux-serial-test -s -e -p /dev/ttyO1 -t -c -l 250
+
+and on the transmitter side:
+
+    linux-serial-test -s -e -p /dev/ttyO0 -r -c
 
 ## Stress test that can be used in a script
 
