@@ -17,6 +17,14 @@
 #include <linux/serial.h>
 #include <errno.h>
 
+/* 
+ * glibc for MIPS has its own bits/termios.h which does not define
+ * CMSPAR, so we vampirise the value from the generic bits/termios.h
+ */
+#ifndef CMSPAR
+#define CMSPAR 010000000000
+#endif
+
 // command line args
 int _cl_baud = 0;
 char *_cl_port = NULL;
