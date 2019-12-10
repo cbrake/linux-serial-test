@@ -495,7 +495,7 @@ static void setup_serial_port(int baud)
 			perror("Error getting RS-485 mode");
 		}
 	} else if (_cl_rs485_delay >= 0) {
-		rs485.flags |= SER_RS485_ENABLED |
+		rs485.flags |= SER_RS485_ENABLED | SER_RS485_RX_DURING_TX |
 			(_cl_rs485_rts_after_send ? SER_RS485_RTS_AFTER_SEND : SER_RS485_RTS_ON_SEND);
 		rs485.flags &= ~(_cl_rs485_rts_after_send ? SER_RS485_RTS_ON_SEND : SER_RS485_RTS_AFTER_SEND);
 		rs485.delay_rts_after_send = _cl_rs485_delay;
