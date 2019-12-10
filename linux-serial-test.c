@@ -48,6 +48,7 @@ int _cl_rx_delay = 0;
 int _cl_tx_delay = 0;
 int _cl_tx_bytes = 0;
 int _cl_rs485_delay = -1;
+int _cl_rs485_rts_after_send = 0;
 int _cl_tx_time = 0;
 int _cl_rx_time = 0;
 int _cl_ascii_range = 0;
@@ -199,6 +200,7 @@ static void display_help(void)
 			"  -q, --rs485       Enable RS485 direction control on port, and set delay\n"
 			"                    from when TX is finished and RS485 driver enable is\n"
 			"                    de-asserted. Delay is specified in bit times.\n"
+			"  -Q, --rs485_rts   Deassert RTS on send, assert after send. Omitting -Q inverts this logic.\n"
 			"  -o, --tx-time     Number of seconds to transmit for (defaults to 0, meaning no limit)\n"
 			"  -i, --rx-time     Number of seconds to receive for (defaults to 0, meaning no limit)\n"
 			"  -A, --ascii       Output bytes range from 32 to 126 (default is 0 to 255)\n"
@@ -210,7 +212,7 @@ static void process_options(int argc, char * argv[])
 {
 	for (;;) {
 		int option_index = 0;
-		static const char *short_options = "hb:p:d:R:TsSy:z:cBertq:l:a:w:o:i:P:A";
+		static const char *short_options = "hb:p:d:R:TsSy:z:cBertq:Ql:a:w:o:i:P:A";
 		static const struct option long_options[] = {
 			{"help", no_argument, 0, 0},
 			{"baud", required_argument, 0, 'b'},
@@ -232,6 +234,7 @@ static void process_options(int argc, char * argv[])
 			{"tx-delay", required_argument, 0, 'a'},
 			{"tx-bytes", required_argument, 0, 'w'},
 			{"rs485", required_argument, 0, 'q'},
+			{"rs485_rts", no_argument, 0, 'Q'},
 			{"tx-time", required_argument, 0, 'o'},
 			{"rx-time", required_argument, 0, 'i'},
 			{"ascii", no_argument, 0, 'A'},
@@ -323,6 +326,9 @@ static void process_options(int argc, char * argv[])
 			_cl_rs485_delay = strtol(optarg, &endptr, 0);
 			break;
 		}
+		case 'Q':
+			_cl_rs485_rts_after_send = 1;
+			break;
 		case 'o': {
 			char *endptr;
 			_cl_tx_time = strtol(optarg, &endptr, 0);
@@ -489,7 +495,9 @@ static void setup_serial_port(int baud)
 			perror("Error getting RS-485 mode");
 		}
 	} else if (_cl_rs485_delay >= 0) {
-		rs485.flags |= SER_RS485_ENABLED | SER_RS485_RTS_ON_SEND | SER_RS485_RTS_AFTER_SEND;
+		rs485.flags |= SER_RS485_ENABLED | SER_RS485_RX_DURING_TX |
+			(_cl_rs485_rts_after_send ? SER_RS485_RTS_AFTER_SEND : SER_RS485_RTS_ON_SEND);
+		rs485.flags &= ~(_cl_rs485_rts_after_send ? SER_RS485_RTS_ON_SEND : SER_RS485_RTS_AFTER_SEND);
 		rs485.delay_rts_after_send = _cl_rs485_delay;
 		rs485.delay_rts_before_send = 0;
 		if(ioctl(_fd, TIOCSRS485, &rs485) < 0) {
