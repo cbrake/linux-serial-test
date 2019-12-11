@@ -47,7 +47,8 @@ int _cl_no_tx = 0;
 int _cl_rx_delay = 0;
 int _cl_tx_delay = 0;
 int _cl_tx_bytes = 0;
-int _cl_rs485_delay = -1;
+int _cl_rs485_after_delay = -1;
+int _cl_rs485_before_delay = 0;
 int _cl_rs485_rts_after_send = 0;
 int _cl_tx_time = 0;
 int _cl_rx_time = 0;
@@ -197,9 +198,10 @@ static void display_help(void)
 			"  -a, --tx-delay    Delay between writing data (ms)\n"
 			"  -w, --tx-bytes    Number of bytes for each write (default is to repeatedly write 1024 bytes\n"
 			"                    until no more are accepted)\n"
-			"  -q, --rs485       Enable RS485 direction control on port, and set delay\n"
-			"                    from when TX is finished and RS485 driver enable is\n"
-			"                    de-asserted. Delay is specified in bit times.\n"
+			"  -q, --rs485       Enable RS485 direction control on port, and set delay from when TX is\n"
+			"                    finished and RS485 driver enable is de-asserted. Delay is specified in\n"
+			"                    bit times. To optionally specify a delay from when the driver is enabled\n"
+			"                    to start of TX use 'after_delay.before_delay' (-q 1.1)\n"
 			"  -Q, --rs485_rts   Deassert RTS on send, assert after send. Omitting -Q inverts this logic.\n"
 			"  -o, --tx-time     Number of seconds to transmit for (defaults to 0, meaning no limit)\n"
 			"  -i, --rx-time     Number of seconds to receive for (defaults to 0, meaning no limit)\n"
@@ -323,7 +325,8 @@ static void process_options(int argc, char * argv[])
 		}
 		case 'q': {
 			char *endptr;
-			_cl_rs485_delay = strtol(optarg, &endptr, 0);
+			_cl_rs485_after_delay = strtol(optarg, &endptr, 0);
+			_cl_rs485_before_delay = strtol(endptr+1, &endptr, 0);
 			break;
 		}
 		case 'Q':
@@ -490,16 +493,16 @@ static void setup_serial_port(int baud)
 
 	/* enable/disable rs485 direction control */
 	if(ioctl(_fd, TIOCGRS485, &rs485) < 0) {
-		if (_cl_rs485_delay >= 0) {
+		if (_cl_rs485_after_delay >= 0) {
 			/* error could be because hardware is missing rs485 support so only print when actually trying to activate it */
 			perror("Error getting RS-485 mode");
 		}
-	} else if (_cl_rs485_delay >= 0) {
+	} else if (_cl_rs485_after_delay >= 0) {
 		rs485.flags |= SER_RS485_ENABLED | SER_RS485_RX_DURING_TX |
 			(_cl_rs485_rts_after_send ? SER_RS485_RTS_AFTER_SEND : SER_RS485_RTS_ON_SEND);
 		rs485.flags &= ~(_cl_rs485_rts_after_send ? SER_RS485_RTS_ON_SEND : SER_RS485_RTS_AFTER_SEND);
-		rs485.delay_rts_after_send = _cl_rs485_delay;
-		rs485.delay_rts_before_send = 0;
+		rs485.delay_rts_after_send = _cl_rs485_after_delay;
+		rs485.delay_rts_before_send = _cl_rs485_before_delay;
 		if(ioctl(_fd, TIOCSRS485, &rs485) < 0) {
 			perror("Error setting RS-485 mode");
 		}
