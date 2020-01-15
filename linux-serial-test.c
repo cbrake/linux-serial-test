@@ -665,8 +665,8 @@ int main(int argc, char * argv[])
 			if (rx_timeout || tx_timeout) {
 				const char *s;
 				if (rx_timeout) {
-					printf("No data received for %.1fs.",
-					       (double)diff_ms(&current, &last_read) / 1000);
+					printf("%s: No data received for %.1fs.",
+					       _cl_port, (double)diff_ms(&current, &last_read) / 1000);
 					s = " ";
 				} else {
 					s = "";
