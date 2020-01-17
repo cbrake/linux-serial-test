@@ -17,12 +17,19 @@
 #include <linux/serial.h>
 #include <errno.h>
 
-/* 
+/*
  * glibc for MIPS has its own bits/termios.h which does not define
  * CMSPAR, so we vampirise the value from the generic bits/termios.h
  */
 #ifndef CMSPAR
 #define CMSPAR 010000000000
+#endif
+
+/*
+ * Define modem line bits
+ */
+#ifndef TIOCM_LOOP
+#define TIOCM_LOOP	0x8000
 #endif
 
 // command line args
@@ -41,6 +48,7 @@ int _cl_2_stop_bit = 0;
 int _cl_parity = 0;
 int _cl_odd_parity = 0;
 int _cl_stick_parity = 0;
+int _cl_loopback = 0;
 int _cl_dump_err = 0;
 int _cl_no_rx = 0;
 int _cl_no_tx = 0;
@@ -173,6 +181,25 @@ static int get_baud(int baud)
 	}
 }
 
+void set_modem_lines(int fd, int bits, int mask)
+{
+	int status, ret;
+
+	ret = ioctl(fd, TIOCMGET, &status);
+	if (ret < 0) {
+		perror("TIOCMGET failed");
+		exit(1);
+	}
+
+	status = (status & ~mask) | (bits & mask);
+
+	ret = ioctl(fd, TIOCMSET, &status);
+	if (ret < 0) {
+		perror("TIOCMSET failed");
+		exit(1);
+	}
+}
+
 static void display_help(void)
 {
 	printf("Usage: linux-serial-test [OPTION]\n"
@@ -190,6 +217,7 @@ static void display_help(void)
 			"  -c, --rts-cts     Enable RTS/CTS flow control\n"
 			"  -B, --2-stop-bit  Use two stop bits per character\n"
 			"  -P, --parity      Use parity bit (odd, even, mark, space)\n"
+			"  -k, --loopback    Use internal hardware loop back\n"
 			"  -e, --dump-err    Display errors\n"
 			"  -r, --no-rx       Don't receive data (can be used to test flow control)\n"
 			"                    when serial driver buffer is full\n"
@@ -214,7 +242,7 @@ static void process_options(int argc, char * argv[])
 {
 	for (;;) {
 		int option_index = 0;
-		static const char *short_options = "hb:p:d:R:TsSy:z:cBertq:Ql:a:w:o:i:P:A";
+		static const char *short_options = "hb:p:d:R:TsSy:z:cBertq:Ql:a:w:o:i:P:kA";
 		static const struct option long_options[] = {
 			{"help", no_argument, 0, 0},
 			{"baud", required_argument, 0, 'b'},
@@ -229,6 +257,7 @@ static void process_options(int argc, char * argv[])
 			{"rts-cts", no_argument, 0, 'c'},
 			{"2-stop-bit", no_argument, 0, 'B'},
 			{"parity", required_argument, 0, 'P'},
+			{"loopback", no_argument, 0, 'k'},
 			{"dump-err", no_argument, 0, 'e'},
 			{"no-rx", no_argument, 0, 'r'},
 			{"no-tx", no_argument, 0, 't'},
@@ -298,6 +327,9 @@ static void process_options(int argc, char * argv[])
 			_cl_parity = 1;
 			_cl_odd_parity = (!strcmp(optarg, "mark")||!strcmp(optarg, "odd"));
 			_cl_stick_parity = (!strcmp(optarg, "mark")||!strcmp(optarg, "space"));
+			break;
+		case 'k':
+			_cl_loopback = 1;
 			break;
 		case 'e':
 			_cl_dump_err = 1;
@@ -555,6 +587,8 @@ int main(int argc, char * argv[])
 		setup_serial_port(baud);
 	}
 
+	set_modem_lines(_fd, _cl_loopback ? TIOCM_LOOP : 0, TIOCM_LOOP);
+
 	if (_cl_single_byte >= 0) {
 		unsigned char data[2];
 		int bytes = 1;
@@ -708,6 +742,7 @@ int main(int argc, char * argv[])
 
 	tcdrain(_fd);
 	dump_serial_port_stats();
+	set_modem_lines(_fd, 0, TIOCM_LOOP);
 	tcflush(_fd, TCIOFLUSH);
 	free(_cl_port);
 
