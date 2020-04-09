@@ -103,16 +103,20 @@ static void set_baud_divisor(int speed)
 	}
 
 	ss.flags = (ss.flags & ~ASYNC_SPD_MASK) | ASYNC_SPD_CUST;
-	ss.custom_divisor = (ss.baud_base + (speed/2)) / speed;
-	int closest_speed = ss.baud_base / ss.custom_divisor;
+	if (!_cl_divisor) {
+		ss.custom_divisor = (ss.baud_base + (speed/2)) / speed;
+		int closest_speed = ss.baud_base / ss.custom_divisor;
 
-	if (closest_speed < speed * 98 / 100 || closest_speed > speed * 102 / 100) {
-		fprintf(stderr, "Cannot set speed to %d, closest is %d\n", speed, closest_speed);
-		exit(1);
+		if (closest_speed < speed * 98 / 100 || closest_speed > speed * 102 / 100) {
+			fprintf(stderr, "Cannot set speed to %d, closest is %d\n", speed, closest_speed);
+			exit(1);
+		}
+
+		printf("closest baud = %i, base = %i, divisor = %i\n", closest_speed, ss.baud_base,
+				ss.custom_divisor);
+	} else {
+		ss.custom_divisor = _cl_divisor;
 	}
-
-	printf("closest baud = %i, base = %i, divisor = %i\n", closest_speed, ss.baud_base,
-			ss.custom_divisor);
 
 	if (ioctl(_fd, TIOCSSERIAL, &ss) < 0) {
 		perror("TIOCSSERIAL failed");
@@ -291,9 +295,11 @@ static void process_options(int argc, char * argv[])
 		case 'p':
 			_cl_port = strdup(optarg);
 			break;
-		case 'd':
-			_cl_divisor = atoi(optarg);
+		case 'd': {
+			char * endptr;
+			_cl_divisor = strtol(optarg, &endptr, 0);
 			break;
+		}
 		case 'R':
 			_cl_rx_dump = 1;
 			_cl_rx_dump_ascii = !strcmp(optarg, "ascii");
