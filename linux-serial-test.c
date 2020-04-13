@@ -296,8 +296,7 @@ static void process_options(int argc, char * argv[])
 			_cl_port = strdup(optarg);
 			break;
 		case 'd': {
-			char * endptr;
-			_cl_divisor = strtol(optarg, &endptr, 0);
+			_cl_divisor = strtol(optarg, NULL, 0);
 			break;
 		}
 		case 'R':
