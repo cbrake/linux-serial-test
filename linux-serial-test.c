@@ -295,10 +295,9 @@ static void process_options(int argc, char * argv[])
 		case 'p':
 			_cl_port = strdup(optarg);
 			break;
-		case 'd': {
+		case 'd':
 			_cl_divisor = strtol(optarg, NULL, 0);
 			break;
-		}
 		case 'R':
 			_cl_rx_dump = 1;
 			_cl_rx_dump_ascii = !strcmp(optarg, "ascii");
