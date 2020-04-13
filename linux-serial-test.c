@@ -93,7 +93,7 @@ static void dump_data_ascii(unsigned char * b, int count)
 	}
 }
 
-static void set_baud_divisor(int speed)
+static void set_baud_divisor(int speed, int custom_divisor)
 {
 	// default baud was not found, so try to set a custom divisor
 	struct serial_struct ss;
@@ -103,7 +103,9 @@ static void set_baud_divisor(int speed)
 	}
 
 	ss.flags = (ss.flags & ~ASYNC_SPD_MASK) | ASYNC_SPD_CUST;
-	if (!_cl_divisor) {
+	if (custom_divisor) {
+		ss.custom_divisor = custom_divisor;
+	} else {
 		ss.custom_divisor = (ss.baud_base + (speed/2)) / speed;
 		int closest_speed = ss.baud_base / ss.custom_divisor;
 
@@ -114,8 +116,6 @@ static void set_baud_divisor(int speed)
 
 		printf("closest baud = %i, base = %i, divisor = %i\n", closest_speed, ss.baud_base,
 				ss.custom_divisor);
-	} else {
-		ss.custom_divisor = _cl_divisor;
 	}
 
 	if (ioctl(_fd, TIOCSSERIAL, &ss) < 0) {
@@ -180,7 +180,7 @@ static int get_baud(int baud)
 	case 4000000:
 		return B4000000;
 #endif
-	default: 
+	default:
 		return -1;
 	}
 }
@@ -581,14 +581,14 @@ int main(int argc, char * argv[])
 
 	int baud = B115200;
 
-	if (_cl_baud)
+	if (_cl_baud && !_cl_divisor)
 		baud = get_baud(_cl_baud);
 
-	if (baud <= 0) {
+	if (baud <= 0 || _cl_divisor) {
 		printf("NOTE: non standard baud rate, trying custom divisor\n");
 		baud = B38400;
 		setup_serial_port(B38400);
-		set_baud_divisor(_cl_baud);
+		set_baud_divisor(_cl_baud, _cl_divisor);
 	} else {
 		setup_serial_port(baud);
 	}
