@@ -124,6 +124,25 @@ static void set_baud_divisor(int speed, int custom_divisor)
 	}
 }
 
+static void clear_custom_speed_flag()
+{
+	struct serial_struct ss;
+	if (ioctl(_fd, TIOCGSERIAL, &ss) < 0) {
+		perror("TIOCGSERIAL failed");
+		exit(1);
+	}
+
+	if ((ss.flags & ASYNC_SPD_MASK) != ASYNC_SPD_CUST)
+		return;
+
+	ss.flags &= ~ASYNC_SPD_MASK;
+
+	if (ioctl(_fd, TIOCSSERIAL, &ss) < 0) {
+		perror("TIOCSSERIAL failed");
+		exit(1);
+	}
+}
+
 // converts integer baud to Linux define
 static int get_baud(int baud)
 {
@@ -589,6 +608,11 @@ int main(int argc, char * argv[])
 		set_baud_divisor(_cl_baud, _cl_divisor);
 	} else {
 		setup_serial_port(baud);
+		/*
+		 * The flag ASYNC_SPD_CUST might have already been set, so
+		 * clear it to avoid confusing the kernel uart dirver.
+		 */
+		clear_custom_speed_flag();
 	}
 
 	set_modem_lines(_fd, _cl_loopback ? TIOCM_LOOP : 0, TIOCM_LOOP);
