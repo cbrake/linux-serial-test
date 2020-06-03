@@ -128,8 +128,8 @@ static void clear_custom_speed_flag()
 {
 	struct serial_struct ss;
 	if (ioctl(_fd, TIOCGSERIAL, &ss) < 0) {
-		perror("TIOCGSERIAL failed");
-		exit(1);
+		// return silently as some devices do not support TIOCGSERIAL
+		return;
 	}
 
 	if ((ss.flags & ASYNC_SPD_MASK) != ASYNC_SPD_CUST)
