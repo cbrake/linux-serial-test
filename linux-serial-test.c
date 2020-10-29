@@ -546,27 +546,31 @@ static void setup_serial_port(int baud)
 	tcflush(_fd, TCIOFLUSH);
 	tcsetattr(_fd,TCSANOW,&newtio);
 
-	/* enable/disable rs485 direction control */
+	/* enable/disable rs485 direction control, first check if RS485 is supported */
 	if(ioctl(_fd, TIOCGRS485, &rs485) < 0) {
 		if (_cl_rs485_after_delay >= 0) {
 			/* error could be because hardware is missing rs485 support so only print when actually trying to activate it */
 			perror("Error getting RS-485 mode");
 		}
-	} else if (_cl_rs485_after_delay >= 0) {
-		rs485.flags |= SER_RS485_ENABLED | SER_RS485_RX_DURING_TX |
-			(_cl_rs485_rts_after_send ? SER_RS485_RTS_AFTER_SEND : SER_RS485_RTS_ON_SEND);
-		rs485.flags &= ~(_cl_rs485_rts_after_send ? SER_RS485_RTS_ON_SEND : SER_RS485_RTS_AFTER_SEND);
-		rs485.delay_rts_after_send = _cl_rs485_after_delay;
-		rs485.delay_rts_before_send = _cl_rs485_before_delay;
-		if(ioctl(_fd, TIOCSRS485, &rs485) < 0) {
-			perror("Error setting RS-485 mode");
-		}
 	} else {
-		rs485.flags &= ~(SER_RS485_ENABLED | SER_RS485_RTS_ON_SEND | SER_RS485_RTS_AFTER_SEND);
-		rs485.delay_rts_after_send = 0;
-		rs485.delay_rts_before_send = 0;
-		if(ioctl(_fd, TIOCSRS485, &rs485) < 0) {
-			perror("Error setting RS-232 mode");
+		if (_cl_rs485_after_delay >= 0) {
+			/* enable RS485 */
+			rs485.flags |= SER_RS485_ENABLED | SER_RS485_RX_DURING_TX |
+				(_cl_rs485_rts_after_send ? SER_RS485_RTS_AFTER_SEND : SER_RS485_RTS_ON_SEND);
+			rs485.flags &= ~(_cl_rs485_rts_after_send ? SER_RS485_RTS_ON_SEND : SER_RS485_RTS_AFTER_SEND);
+			rs485.delay_rts_after_send = _cl_rs485_after_delay;
+			rs485.delay_rts_before_send = _cl_rs485_before_delay;
+			if(ioctl(_fd, TIOCSRS485, &rs485) < 0) {
+				perror("Error setting RS-485 mode");
+			}
+		} else {
+			/* disable RS485 */
+			rs485.flags &= ~(SER_RS485_ENABLED | SER_RS485_RTS_ON_SEND | SER_RS485_RTS_AFTER_SEND);
+			rs485.delay_rts_after_send = 0;
+			rs485.delay_rts_before_send = 0;
+			if(ioctl(_fd, TIOCSRS485, &rs485) < 0) {
+				perror("Error setting RS-232 mode");
+			}
 		}
 	}
 }
