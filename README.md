@@ -1,7 +1,15 @@
-linux-serial-test
-=================
+# linux-serial-test
 
 # Linux Serial Test Application
+
+# Compiling
+
+This is a very simple program -- there are several ways to compile it on Linux:
+
+- `gcc -o linux-serial-test linux-serial-test.c`
+- using CMake
+  - `cmake ./`
+  - `make`
 
 # Usage
 
@@ -42,7 +50,7 @@ linux-serial-test
     linux-serial-test -s -e -p /dev/ttyO0 -b 3000000
 
 This will send full bandwidth data with a counting pattern on the TX signal.
-On any data received on RX, the program will look for a counting pattern and 
+On any data received on RX, the program will look for a counting pattern and
 report any missing data in the pattern. This test can be done using a loopback
 cable.
 
