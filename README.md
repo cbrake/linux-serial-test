@@ -6,10 +6,14 @@
 
 This is a very simple program -- there are several ways to compile it on Linux:
 
-- `gcc -o linux-serial-test linux-serial-test.c`
-- using CMake
-  - `cmake ./`
-  - `make`
+## directly using GCC
+
+`gcc -o linux-serial-test linux-serial-test.c`
+
+## Using CMake
+
+- `cmake ./`
+- `make`
 
 # Usage
 
