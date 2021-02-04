@@ -32,6 +32,8 @@ This is a very simple program -- there are several ways to compile it on Linux:
       -c, --rts-cts     Enable RTS/CTS flow control
       -B, --2-stop-bit  Use two stop bits per character
       -P, --parity      Use parity bit (odd, even, mark, space)
+      -k, --loopback     Use internal hardware loop back
+      -K, --write-follow Write follows the read count (can be used for multi-serial loopback)
       -e, --dump-err    Display errors
       -r, --no-rx       Don't receive data (can be used to test flow control)
                         when serial driver buffer is full
