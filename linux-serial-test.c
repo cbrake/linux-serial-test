@@ -749,6 +749,7 @@ int main(int argc, char * argv[])
 	set_modem_lines(_fd, 0, TIOCM_LOOP);
 	tcflush(_fd, TCIOFLUSH);
 	free(_cl_port);
+	free(_write_data);
 
 	long long int result = llabs(_write_count - _read_count) + _error_count;
 
