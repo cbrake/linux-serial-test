@@ -61,6 +61,7 @@ int _cl_rs485_rts_after_send = 0;
 int _cl_tx_time = 0;
 int _cl_rx_time = 0;
 int _cl_ascii_range = 0;
+int _cl_write_after_read = 0;
 
 // Module variables
 unsigned char _write_count_value = 0;
@@ -117,6 +118,25 @@ static void set_baud_divisor(int speed, int custom_divisor)
 		printf("closest baud = %i, base = %i, divisor = %i\n", closest_speed, ss.baud_base,
 				ss.custom_divisor);
 	}
+
+	if (ioctl(_fd, TIOCSSERIAL, &ss) < 0) {
+		perror("TIOCSSERIAL failed");
+		exit(1);
+	}
+}
+
+static void clear_custom_speed_flag()
+{
+	struct serial_struct ss;
+	if (ioctl(_fd, TIOCGSERIAL, &ss) < 0) {
+		// return silently as some devices do not support TIOCGSERIAL
+		return;
+	}
+
+	if ((ss.flags & ASYNC_SPD_MASK) != ASYNC_SPD_CUST)
+		return;
+
+	ss.flags &= ~ASYNC_SPD_MASK;
 
 	if (ioctl(_fd, TIOCSSERIAL, &ss) < 0) {
 		perror("TIOCSSERIAL failed");
@@ -209,35 +229,36 @@ static void display_help(void)
 	printf("Usage: linux-serial-test [OPTION]\n"
 			"\n"
 			"  -h, --help\n"
-			"  -b, --baud        Baud rate, 115200, etc (115200 is default)\n"
-			"  -p, --port        Port (/dev/ttyS0, etc) (must be specified)\n"
-			"  -d, --divisor     UART Baud rate divisor (can be used to set custom baud rates)\n"
-			"  -R, --rx_dump     Dump Rx data (ascii, raw)\n"
-			"  -T, --detailed_tx Detailed Tx data\n"
-			"  -s, --stats       Dump serial port stats every 5s\n"
-			"  -S, --stop-on-err Stop program if we encounter an error\n"
-			"  -y, --single-byte Send specified byte to the serial port\n"
-			"  -z, --second-byte Send another specified byte to the serial port\n"
-			"  -c, --rts-cts     Enable RTS/CTS flow control\n"
-			"  -B, --2-stop-bit  Use two stop bits per character\n"
-			"  -P, --parity      Use parity bit (odd, even, mark, space)\n"
-			"  -k, --loopback    Use internal hardware loop back\n"
-			"  -e, --dump-err    Display errors\n"
-			"  -r, --no-rx       Don't receive data (can be used to test flow control)\n"
-			"                    when serial driver buffer is full\n"
-			"  -t, --no-tx       Don't transmit data\n"
-			"  -l, --rx-delay    Delay between reading data (ms) (can be used to test flow control)\n"
-			"  -a, --tx-delay    Delay between writing data (ms)\n"
-			"  -w, --tx-bytes    Number of bytes for each write (default is to repeatedly write 1024 bytes\n"
-			"                    until no more are accepted)\n"
-			"  -q, --rs485       Enable RS485 direction control on port, and set delay from when TX is\n"
-			"                    finished and RS485 driver enable is de-asserted. Delay is specified in\n"
-			"                    bit times. To optionally specify a delay from when the driver is enabled\n"
-			"                    to start of TX use 'after_delay.before_delay' (-q 1.1)\n"
-			"  -Q, --rs485_rts   Deassert RTS on send, assert after send. Omitting -Q inverts this logic.\n"
-			"  -o, --tx-time     Number of seconds to transmit for (defaults to 0, meaning no limit)\n"
-			"  -i, --rx-time     Number of seconds to receive for (defaults to 0, meaning no limit)\n"
-			"  -A, --ascii       Output bytes range from 32 to 126 (default is 0 to 255)\n"
+			"  -b, --baud         Baud rate, 115200, etc (115200 is default)\n"
+			"  -p, --port         Port (/dev/ttyS0, etc) (must be specified)\n"
+			"  -d, --divisor      UART Baud rate divisor (can be used to set custom baud rates)\n"
+			"  -R, --rx_dump      Dump Rx data (ascii, raw)\n"
+			"  -T, --detailed_tx  Detailed Tx data\n"
+			"  -s, --stats        Dump serial port stats every 5s\n"
+			"  -S, --stop-on-err  Stop program if we encounter an error\n"
+			"  -y, --single-byte  Send specified byte to the serial port\n"
+			"  -z, --second-byte  Send another specified byte to the serial port\n"
+			"  -c, --rts-cts      Enable RTS/CTS flow control\n"
+			"  -B, --2-stop-bit   Use two stop bits per character\n"
+			"  -P, --parity       Use parity bit (odd, even, mark, space)\n"
+			"  -k, --loopback     Use internal hardware loop back\n"
+			"  -K, --write-follow Write follows the read count (can be used for multi-serial loopback)\n"
+			"  -e, --dump-err     Display errors\n"
+			"  -r, --no-rx        Don't receive data (can be used to test flow control)\n"
+			"                     when serial driver buffer is full\n"
+			"  -t, --no-tx        Don't transmit data\n"
+			"  -l, --rx-delay     Delay between reading data (ms) (can be used to test flow control)\n"
+			"  -a, --tx-delay     Delay between writing data (ms)\n"
+			"  -w, --tx-bytes     Number of bytes for each write (default is to repeatedly write 1024 bytes\n"
+			"                     until no more are accepted)\n"
+			"  -q, --rs485        Enable RS485 direction control on port, and set delay from when TX is\n"
+			"                     finished and RS485 driver enable is de-asserted. Delay is specified in\n"
+			"                     bit times. To optionally specify a delay from when the driver is enabled\n"
+			"                     to start of TX use 'after_delay.before_delay' (-q 1.1)\n"
+			"  -Q, --rs485_rts    Deassert RTS on send, assert after send. Omitting -Q inverts this logic.\n"
+			"  -o, --tx-time      Number of seconds to transmit for (defaults to 0, meaning no limit)\n"
+			"  -i, --rx-time      Number of seconds to receive for (defaults to 0, meaning no limit)\n"
+			"  -A, --ascii        Output bytes range from 32 to 126 (default is 0 to 255)\n"
 			"\n"
 	      );
 }
@@ -246,7 +267,7 @@ static void process_options(int argc, char * argv[])
 {
 	for (;;) {
 		int option_index = 0;
-		static const char *short_options = "hb:p:d:R:TsSy:z:cBertq:Ql:a:w:o:i:P:kA";
+		static const char *short_options = "hb:p:d:R:TsSy:z:cBertq:Ql:a:w:o:i:P:kKA";
 		static const struct option long_options[] = {
 			{"help", no_argument, 0, 0},
 			{"baud", required_argument, 0, 'b'},
@@ -262,6 +283,7 @@ static void process_options(int argc, char * argv[])
 			{"2-stop-bit", no_argument, 0, 'B'},
 			{"parity", required_argument, 0, 'P'},
 			{"loopback", no_argument, 0, 'k'},
+			{"write-follows", no_argument, 0, 'K'},
 			{"dump-err", no_argument, 0, 'e'},
 			{"no-rx", no_argument, 0, 'r'},
 			{"no-tx", no_argument, 0, 't'},
@@ -334,6 +356,9 @@ static void process_options(int argc, char * argv[])
 			break;
 		case 'k':
 			_cl_loopback = 1;
+			break;
+		case 'K':
+			_cl_write_after_read = 1;
 			break;
 		case 'e':
 			_cl_dump_err = 1;
@@ -443,17 +468,30 @@ static void process_read_data(void)
 static void process_write_data(void)
 {
 	ssize_t count = 0;
+	ssize_t actual_write_size = 0;
 	int repeat = (_cl_tx_bytes == 0);
 
 	do
 	{
+		if (_cl_write_after_read == 0) {
+			actual_write_size = _write_size;
+		} else {
+			actual_write_size = _read_count > _write_count ? _read_count - _write_count : 0;
+			if (actual_write_size > _write_size) {
+				actual_write_size = _write_size;
+			}
+		}
+		if (actual_write_size == 0) {
+			break;
+		}
+
 		ssize_t i;
-		for (i = 0; i < _write_size; i++) {
+		for (i = 0; i < actual_write_size; i++) {
 			_write_data[i] = _write_count_value;
 			_write_count_value = next_count_value(_write_count_value);
 		}
 
-		ssize_t c = write(_fd, _write_data, _write_size);
+		ssize_t c = write(_fd, _write_data, actual_write_size);
 
 		if (c < 0) {
 			if (errno != EAGAIN) {
@@ -464,7 +502,7 @@ static void process_write_data(void)
 
 		count += c;
 
-		if (c < _write_size) {
+		if (c < actual_write_size) {
 			_write_count_value = _write_data[c];
 			repeat = 0;
 		}
@@ -527,27 +565,31 @@ static void setup_serial_port(int baud)
 	tcflush(_fd, TCIOFLUSH);
 	tcsetattr(_fd,TCSANOW,&newtio);
 
-	/* enable/disable rs485 direction control */
+	/* enable/disable rs485 direction control, first check if RS485 is supported */
 	if(ioctl(_fd, TIOCGRS485, &rs485) < 0) {
 		if (_cl_rs485_after_delay >= 0) {
 			/* error could be because hardware is missing rs485 support so only print when actually trying to activate it */
 			perror("Error getting RS-485 mode");
 		}
-	} else if (_cl_rs485_after_delay >= 0) {
-		rs485.flags |= SER_RS485_ENABLED | SER_RS485_RX_DURING_TX |
-			(_cl_rs485_rts_after_send ? SER_RS485_RTS_AFTER_SEND : SER_RS485_RTS_ON_SEND);
-		rs485.flags &= ~(_cl_rs485_rts_after_send ? SER_RS485_RTS_ON_SEND : SER_RS485_RTS_AFTER_SEND);
-		rs485.delay_rts_after_send = _cl_rs485_after_delay;
-		rs485.delay_rts_before_send = _cl_rs485_before_delay;
-		if(ioctl(_fd, TIOCSRS485, &rs485) < 0) {
-			perror("Error setting RS-485 mode");
-		}
 	} else {
-		rs485.flags &= ~(SER_RS485_ENABLED | SER_RS485_RTS_ON_SEND | SER_RS485_RTS_AFTER_SEND);
-		rs485.delay_rts_after_send = 0;
-		rs485.delay_rts_before_send = 0;
-		if(ioctl(_fd, TIOCSRS485, &rs485) < 0) {
-			perror("Error setting RS-232 mode");
+		if (_cl_rs485_after_delay >= 0) {
+			/* enable RS485 */
+			rs485.flags |= SER_RS485_ENABLED | SER_RS485_RX_DURING_TX |
+				(_cl_rs485_rts_after_send ? SER_RS485_RTS_AFTER_SEND : SER_RS485_RTS_ON_SEND);
+			rs485.flags &= ~(_cl_rs485_rts_after_send ? SER_RS485_RTS_ON_SEND : SER_RS485_RTS_AFTER_SEND);
+			rs485.delay_rts_after_send = _cl_rs485_after_delay;
+			rs485.delay_rts_before_send = _cl_rs485_before_delay;
+			if(ioctl(_fd, TIOCSRS485, &rs485) < 0) {
+				perror("Error setting RS-485 mode");
+			}
+		} else {
+			/* disable RS485 */
+			rs485.flags &= ~(SER_RS485_ENABLED | SER_RS485_RTS_ON_SEND | SER_RS485_RTS_AFTER_SEND);
+			rs485.delay_rts_after_send = 0;
+			rs485.delay_rts_before_send = 0;
+			if(ioctl(_fd, TIOCSRS485, &rs485) < 0) {
+				perror("Error setting RS-232 mode");
+			}
 		}
 	}
 }
@@ -589,6 +631,11 @@ int main(int argc, char * argv[])
 		set_baud_divisor(_cl_baud, _cl_divisor);
 	} else {
 		setup_serial_port(baud);
+		/*
+		 * The flag ASYNC_SPD_CUST might have already been set, so
+		 * clear it to avoid confusing the kernel uart dirver.
+		 */
+		clear_custom_speed_flag();
 	}
 
 	set_modem_lines(_fd, _cl_loopback ? TIOCM_LOOP : 0, TIOCM_LOOP);

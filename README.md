@@ -1,7 +1,19 @@
-linux-serial-test
-=================
+# linux-serial-test
 
 # Linux Serial Test Application
+
+# Compiling
+
+This is a very simple program -- there are several ways to compile it on Linux:
+
+## directly using GCC
+
+`gcc -o linux-serial-test linux-serial-test.c`
+
+## Using CMake
+
+- `cmake ./`
+- `make`
 
 # Usage
 
@@ -20,6 +32,8 @@ linux-serial-test
       -c, --rts-cts     Enable RTS/CTS flow control
       -B, --2-stop-bit  Use two stop bits per character
       -P, --parity      Use parity bit (odd, even, mark, space)
+      -k, --loopback     Use internal hardware loop back
+      -K, --write-follow Write follows the read count (can be used for multi-serial loopback)
       -e, --dump-err    Display errors
       -r, --no-rx       Don't receive data (can be used to test flow control)
                         when serial driver buffer is full
@@ -42,7 +56,7 @@ linux-serial-test
     linux-serial-test -s -e -p /dev/ttyO0 -b 3000000
 
 This will send full bandwidth data with a counting pattern on the TX signal.
-On any data received on RX, the program will look for a counting pattern and 
+On any data received on RX, the program will look for a counting pattern and
 report any missing data in the pattern. This test can be done using a loopback
 cable.
 
