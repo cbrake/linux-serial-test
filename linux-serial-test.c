@@ -16,6 +16,7 @@
 #include <time.h>
 #include <linux/serial.h>
 #include <errno.h>
+#include <sys/file.h>
 
 /*
  * glibc for MIPS has its own bits/termios.h which does not define
@@ -74,6 +75,24 @@ ssize_t _write_size;
 long long int _write_count = 0;
 long long int _read_count = 0;
 long long int _error_count = 0;
+
+static void exit_handler(void)
+{
+	if (_fd >= 0) {
+		flock(_fd, LOCK_UN);
+		close(_fd);
+	}
+
+	if (_cl_port) {
+		free(_cl_port);
+		_cl_port = NULL;
+	}
+
+	if (_write_data) {
+		free(_write_data);
+		_write_data = NULL;
+	}
+}
 
 static void dump_data(unsigned char * b, int count)
 {
@@ -528,6 +547,7 @@ static void setup_serial_port(int baud)
 {
 	struct termios newtio;
 	struct serial_rs485 rs485;
+	int ret;
 
 	_fd = open(_cl_port, O_RDWR | O_NONBLOCK);
 
@@ -536,6 +556,13 @@ static void setup_serial_port(int baud)
 		perror("Error opening serial port");
 		free(_cl_port);
 		exit(ret);
+	}
+
+	/* Lock device file */
+	ret = flock(_fd, LOCK_EX | LOCK_NB);
+	if ((ret == -1) && (errno == EWOULDBLOCK)) {
+		perror("Device file is locked by another process");
+		exit(-EWOULDBLOCK);
 	}
 
 	bzero(&newtio, sizeof(newtio)); /* clear struct for new port settings */
@@ -631,6 +658,8 @@ static int compute_error_count(void)
 int main(int argc, char * argv[])
 {
 	printf("Linux serial test app\n");
+
+	atexit(&exit_handler);
 
 	process_options(argc, argv);
 
@@ -817,8 +846,6 @@ int main(int argc, char * argv[])
 	dump_serial_port_stats();
 	set_modem_lines(_fd, 0, TIOCM_LOOP);
 	tcflush(_fd, TCIOFLUSH);
-	free(_cl_port);
-	free(_write_data);
 
 	return compute_error_count();
 }
