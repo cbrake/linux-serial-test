@@ -559,10 +559,10 @@ static void setup_serial_port(int baud)
 	}
 
 	/* Lock device file */
-	ret = flock(_fd, LOCK_EX | LOCK_NB);
-	if ((ret == -1) && (errno == EWOULDBLOCK)) {
-		perror("Device file is locked by another process");
-		exit(-EWOULDBLOCK);
+	if (flock(_fd, LOCK_EX | LOCK_NB) < 0) {
+		ret = -errno;
+		perror("Error failed to lock device file");
+		exit(ret);
 	}
 
 	bzero(&newtio, sizeof(newtio)); /* clear struct for new port settings */
