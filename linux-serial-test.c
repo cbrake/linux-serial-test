@@ -554,7 +554,6 @@ static void setup_serial_port(int baud)
 	if (_fd < 0) {
 		ret = -errno;
 		perror("Error opening serial port");
-		free(_cl_port);
 		exit(ret);
 	}
 
