@@ -61,6 +61,7 @@ int _cl_rs485_before_delay = 0;
 int _cl_rs485_rts_after_send = 0;
 int _cl_tx_time = 0;
 int _cl_rx_time = 0;
+int _cl_tx_wait = 0;
 int _cl_ascii_range = 0;
 int _cl_write_after_read = 0;
 
@@ -283,6 +284,7 @@ static void display_help(void)
 			"                     to start of TX use 'after_delay.before_delay' (-q 1.1)\n"
 			"  -Q, --rs485_rts    Deassert RTS on send, assert after send. Omitting -Q inverts this logic.\n"
 			"  -o, --tx-time      Number of seconds to transmit for (defaults to 0, meaning no limit)\n"
+			"  -O, --tx-wait      Number of seconds to wait before to transmit (defaults to 0, meaning no wait)\n"
 			"  -i, --rx-time      Number of seconds to receive for (defaults to 0, meaning no limit)\n"
 			"  -A, --ascii        Output bytes range from 32 to 126 (default is 0 to 255)\n"
 			"\n"
@@ -293,7 +295,7 @@ static void process_options(int argc, char * argv[])
 {
 	for (;;) {
 		int option_index = 0;
-		static const char *short_options = "hb:p:d:R:TsSy:z:cBertq:Ql:a:w:o:i:P:kKA";
+		static const char *short_options = "hb:p:d:R:TsSy:z:cBertq:Ql:a:w:o:i:O:P:kKA";
 		static const struct option long_options[] = {
 			{"help", no_argument, 0, 0},
 			{"baud", required_argument, 0, 'b'},
@@ -320,6 +322,7 @@ static void process_options(int argc, char * argv[])
 			{"rs485_rts", no_argument, 0, 'Q'},
 			{"tx-time", required_argument, 0, 'o'},
 			{"rx-time", required_argument, 0, 'i'},
+			{"tx-wait", required_argument, 0, 'O'},
 			{"ascii", no_argument, 0, 'A'},
 			{0,0,0,0},
 		};
@@ -427,6 +430,11 @@ static void process_options(int argc, char * argv[])
 		case 'i': {
 			char *endptr;
 			_cl_rx_time = strtol(optarg, &endptr, 0);
+			break;
+		}
+		case 'O': {
+			char *endptr;
+			_cl_tx_wait = strtol(optarg, &endptr, 0);
 			break;
 		}
 		case 'A':
@@ -643,6 +651,11 @@ static int diff_ms(const struct timespec *t1, const struct timespec *t2)
 	return (diff.tv_sec * 1000 + diff.tv_nsec/1000000);
 }
 
+static int diff_s(const struct timespec *t1, const struct timespec *t2)
+{
+	return t1->tv_sec - t2->tv_sec;
+}
+
 static int compute_error_count(void)
 {
 	long long int result;
@@ -744,11 +757,28 @@ int main(int argc, char * argv[])
 	last_read = start_time;
 	last_write = start_time;
 
+	if (_cl_tx_wait)
+		serial_poll.events &= ~POLLOUT;
+
 	while (!(_cl_no_rx && _cl_no_tx)) {
 		struct timespec current;
 		int retval = poll(&serial_poll, 1, 1000);
 
 		clock_gettime(CLOCK_MONOTONIC, &current);
+
+		if (_cl_tx_wait) {
+			if (diff_s(&current, &start_time) >= _cl_tx_wait) {
+				_cl_tx_wait = 0;
+				_cl_no_tx = 0;
+				serial_poll.events |= POLLOUT;
+				printf("Start transmitting.\n");
+			} else {
+				if (!_cl_no_tx) {
+					_cl_no_tx = 1;
+					serial_poll.events &= ~POLLOUT;
+				}
+			}
+		}
 
 		if (retval == -1) {
 			perror("poll()");
