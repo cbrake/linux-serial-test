@@ -64,6 +64,10 @@ int _cl_rx_time = 0;
 int _cl_tx_wait = 0;
 int _cl_ascii_range = 0;
 int _cl_write_after_read = 0;
+int _cl_rx_timeout_ms = 2000;
+int _cl_tx_timeout_ms = 2000;
+int _cl_error_on_timeout = 0;
+int _cl_no_icount = 0;
 
 // Module variables
 unsigned char _write_count_value = 0;
@@ -175,6 +179,12 @@ static void clear_custom_speed_flag()
 static int get_baud(int baud)
 {
 	switch (baud) {
+	case 1200:
+		return B1200;
+	case 2400:
+		return B2400;
+	case 4800:
+		return B4800;
 	case 9600:
 		return B9600;
 	case 19200:
@@ -256,37 +266,41 @@ static void display_help(void)
 	printf("Usage: linux-serial-test [OPTION]\n"
 			"\n"
 			"  -h, --help\n"
-			"  -b, --baud         Baud rate, 115200, etc (115200 is default)\n"
-			"  -p, --port         Port (/dev/ttyS0, etc) (must be specified)\n"
-			"  -d, --divisor      UART Baud rate divisor (can be used to set custom baud rates)\n"
-			"  -R, --rx_dump      Dump Rx data (ascii, raw)\n"
-			"  -T, --detailed_tx  Detailed Tx data\n"
-			"  -s, --stats        Dump serial port stats every 5s\n"
-			"  -S, --stop-on-err  Stop program if we encounter an error\n"
-			"  -y, --single-byte  Send specified byte to the serial port\n"
-			"  -z, --second-byte  Send another specified byte to the serial port\n"
-			"  -c, --rts-cts      Enable RTS/CTS flow control\n"
-			"  -B, --2-stop-bit   Use two stop bits per character\n"
-			"  -P, --parity       Use parity bit (odd, even, mark, space)\n"
-			"  -k, --loopback     Use internal hardware loop back\n"
-			"  -K, --write-follow Write follows the read count (can be used for multi-serial loopback)\n"
-			"  -e, --dump-err     Display errors\n"
-			"  -r, --no-rx        Don't receive data (can be used to test flow control)\n"
-			"                     when serial driver buffer is full\n"
-			"  -t, --no-tx        Don't transmit data\n"
-			"  -l, --rx-delay     Delay between reading data (ms) (can be used to test flow control)\n"
-			"  -a, --tx-delay     Delay between writing data (ms)\n"
-			"  -w, --tx-bytes     Number of bytes for each write (default is to repeatedly write 1024 bytes\n"
-			"                     until no more are accepted)\n"
-			"  -q, --rs485        Enable RS485 direction control on port, and set delay from when TX is\n"
-			"                     finished and RS485 driver enable is de-asserted. Delay is specified in\n"
-			"                     bit times. To optionally specify a delay from when the driver is enabled\n"
-			"                     to start of TX use 'after_delay.before_delay' (-q 1.1)\n"
-			"  -Q, --rs485_rts    Deassert RTS on send, assert after send. Omitting -Q inverts this logic.\n"
-			"  -o, --tx-time      Number of seconds to transmit for (defaults to 0, meaning no limit)\n"
-			"  -O, --tx-wait      Number of seconds to wait before to transmit (defaults to 0, meaning no wait)\n"
-			"  -i, --rx-time      Number of seconds to receive for (defaults to 0, meaning no limit)\n"
-			"  -A, --ascii        Output bytes range from 32 to 126 (default is 0 to 255)\n"
+			"  -b, --baud               Baud rate, 115200, etc (115200 is default)\n"
+			"  -p, --port               Port (/dev/ttyS0, etc) (must be specified)\n"
+			"  -d, --divisor            UART Baud rate divisor (can be used to set custom baud rates)\n"
+			"  -R, --rx_dump            Dump Rx data (ascii, raw)\n"
+			"  -T, --detailed_tx        Detailed Tx data\n"
+			"  -s, --stats              Dump serial port stats every 5s\n"
+			"  -S, --stop-on-err        Stop program if we encounter an error\n"
+			"  -y, --single-byte        Send specified byte to the serial port\n"
+			"  -z, --second-byte        Send another specified byte to the serial port\n"
+			"  -c, --rts-cts            Enable RTS/CTS flow control\n"
+			"  -B, --2-stop-bit         Use two stop bits per character\n"
+			"  -P, --parity             Use parity bit (odd, even, mark, space)\n"
+			"  -k, --loopback           Use internal hardware loop back\n"
+			"  -K, --write-follow       Write follows the read count (can be used for multi-serial loopback)\n"
+			"  -e, --dump-err           Display errors\n"
+			"  -r, --no-rx              Don't receive data (can be used to test flow control)\n"
+			"                           when serial driver buffer is full\n"
+			"  -t, --no-tx              Don't transmit data\n"
+			"  -l, --rx-delay           Delay between reading data (ms) (can be used to test flow control)\n"
+			"  -a, --tx-delay           Delay between writing data (ms)\n"
+			"  -w, --tx-bytes           Number of bytes for each write (default is to repeatedly write 1024 bytes\n"
+			"                           until no more are accepted)\n"
+			"  -q, --rs485              Enable RS485 direction control on port, and set delay from when TX is\n"
+			"                           finished and RS485 driver enable is de-asserted. Delay is specified in\n"
+			"                           bit times. To optionally specify a delay from when the driver is enabled\n"
+			"                           to start of TX use 'after_delay.before_delay' (-q 1.1)\n"
+			"  -Q, --rs485_rts          Deassert RTS on send, assert after send. Omitting -Q inverts this logic.\n"
+			"  -o, --tx-time            Number of seconds to transmit for (defaults to 0, meaning no limit)\n"
+			"  -i, --rx-time            Number of seconds to receive for (defaults to 0, meaning no limit)\n"
+			"  -A, --ascii              Output bytes range from 32 to 126 (default is 0 to 255)\n"
+			"  -I, --rx-timeout         Receive timeout\n"
+			"  -O, --tx-timeout         Transmission timeout\n"
+			"  -W, --tx-wait            Number of seconds to wait before to transmit (defaults to 0, meaning no wait)\n"
+			"  -Z, --error-on-timeout   Treat timeouts as errors\n"
+			"  -n, --no-icount          Do not request driver for counts of input serial line interrupts (TIOCGICOUNT)\n"
 			"\n"
 	      );
 }
@@ -295,7 +309,7 @@ static void process_options(int argc, char * argv[])
 {
 	for (;;) {
 		int option_index = 0;
-		static const char *short_options = "hb:p:d:R:TsSy:z:cBertq:Ql:a:w:o:i:O:P:kKA";
+		static const char *short_options = "hb:p:d:R:TsSy:z:cBertq:Ql:a:w:o:i:P:kKAI:O:W:Zn";
 		static const struct option long_options[] = {
 			{"help", no_argument, 0, 0},
 			{"baud", required_argument, 0, 'b'},
@@ -322,8 +336,12 @@ static void process_options(int argc, char * argv[])
 			{"rs485_rts", no_argument, 0, 'Q'},
 			{"tx-time", required_argument, 0, 'o'},
 			{"rx-time", required_argument, 0, 'i'},
-			{"tx-wait", required_argument, 0, 'O'},
+			{"tx-wait", required_argument, 0, 'W'},
 			{"ascii", no_argument, 0, 'A'},
+			{"rx-timeout", required_argument, 0, 'I'},
+			{"tx-timeout", required_argument, 0, 'O'},
+			{"error-on-timeout", no_argument, 0, 'Z'},
+			{"no-icount", no_argument, 0, 'n'},
 			{0,0,0,0},
 		};
 
@@ -432,13 +450,25 @@ static void process_options(int argc, char * argv[])
 			_cl_rx_time = strtol(optarg, &endptr, 0);
 			break;
 		}
-		case 'O': {
+		case 'W': {
 			char *endptr;
 			_cl_tx_wait = strtol(optarg, &endptr, 0);
 			break;
 		}
 		case 'A':
 			_cl_ascii_range = 1;
+			break;
+		case 'I':
+			_cl_rx_timeout_ms = atoi(optarg);
+			break;
+		case 'O':
+			_cl_tx_timeout_ms = atoi(optarg);
+			break;
+		case 'Z':
+			_cl_error_on_timeout = 1;
+			break;
+		case 'n':
+			_cl_no_icount = 1;
 			break;
 		}
 	}
@@ -450,13 +480,15 @@ static void dump_serial_port_stats(void)
 
 	printf("%s: count for this session: rx=%lld, tx=%lld, rx err=%lld\n", _cl_port, _read_count, _write_count, _error_count);
 
-	int ret = ioctl(_fd, TIOCGICOUNT, &icount);
-	if (ret < 0) {
-		perror("Error getting TIOCGICOUNT");
-	} else {
-		printf("%s: TIOCGICOUNT: ret=%i, rx=%i, tx=%i, frame = %i, overrun = %i, parity = %i, brk = %i, buf_overrun = %i\n",
-				_cl_port, ret, icount.rx, icount.tx, icount.frame, icount.overrun, icount.parity, icount.brk,
-				icount.buf_overrun);
+	if (!_cl_no_icount) {
+		int ret = ioctl(_fd, TIOCGICOUNT, &icount);
+		if (ret < 0) {
+			perror("Error getting TIOCGICOUNT");
+		} else {
+			printf("%s: TIOCGICOUNT: ret=%i, rx=%i, tx=%i, frame = %i, overrun = %i, parity = %i, brk = %i, buf_overrun = %i\n",
+					_cl_port, ret, icount.rx, icount.tx, icount.frame, icount.overrun, icount.parity, icount.brk,
+					icount.buf_overrun);
+		}
 	}
 }
 
@@ -812,13 +844,13 @@ int main(int argc, char * argv[])
 			}
 		}
 
-		// Has it been at least a second since we reported a timeout?
-		if (diff_ms(&current, &last_timeout) > 1000) {
+		// Has it been at least a second since we reported a timeout? Have we ever reported a timeout?
+		if ((diff_ms(&current, &last_timeout) > 1000) || (diff_ms(&last_timeout, &start_time) == 0)) {
 			int rx_timeout, tx_timeout;
 
 			// Has it been over two seconds since we transmitted or received data?
-			rx_timeout = (!_cl_no_rx && diff_ms(&current, &last_read) > 2000);
-			tx_timeout = (!_cl_no_tx && diff_ms(&current, &last_write) > 2000);
+			rx_timeout = (!_cl_no_rx && diff_ms(&current, &last_read) > _cl_rx_timeout_ms);
+			tx_timeout = (!_cl_no_tx && diff_ms(&current, &last_write) > _cl_tx_timeout_ms);
 			// Special case - we don't want to warn about receive
 			// timeouts at the end of a loopback test (where we are
 			// no longer transmitting and the receive count equals
@@ -831,14 +863,22 @@ int main(int argc, char * argv[])
 				const char *s;
 				if (rx_timeout) {
 					printf("%s: No data received for %.1fs.",
-					       _cl_port, (double)diff_ms(&current, &last_read) / 1000);
+						   _cl_port, (double)diff_ms(&current, &last_read) / 1000);
 					s = " ";
+					if (_cl_error_on_timeout) {
+						printf(" Exiting due to timeout.\n");
+						exit(-ETIMEDOUT);
+					}
 				} else {
 					s = "";
 				}
 				if (tx_timeout) {
 					printf("%sNo data transmitted for %.1fs.",
-					       s, (double)diff_ms(&current, &last_write) / 1000);
+						   s, (double)diff_ms(&current, &last_write) / 1000);
+					if (_cl_error_on_timeout) {
+						printf(" Exiting due to timeout.\n");
+						exit(-ETIMEDOUT);
+				}
 				}
 				printf("\n");
 				last_timeout = current;
