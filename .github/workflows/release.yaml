@@ -4,7 +4,7 @@ jobs:
   cross_build:
     # The host should always be linux
     runs-on: ubuntu-22.04
-    name: Build for ${{ matrix.arch }}
+    name: Build for armv7
     steps:
       - uses: actions/checkout@v3
       - uses: uraimo/run-on-arch-action@v2
@@ -17,6 +17,7 @@ jobs:
           # Not required, but speeds up builds
           githubToken: ${{ github.token }}
           run: |
+            binary=linux-serial-test-ubuntu-22.04-armv7-${{ github.ref_name }}
             apt-get update && apt install -y gcc
             gcc -o linux-serial-test linux-serial-test.c
             echo ::set-output name=bin::${binary}
