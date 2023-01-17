@@ -1,0 +1,29 @@
+on: [push, pull_request]
+
+jobs:
+  cross_build:
+    # The host should always be linux
+    runs-on: ubuntu-22.04
+    name: Build for ${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: uraimo/run-on-arch-action@v2
+        name: Build artifact
+        id: build
+        with:
+          arch: armv7
+          distro: ubuntu22.04
+
+          # Not required, but speeds up builds
+          githubToken: ${{ github.token }}
+          run: |
+            apt-get update && apt install -y gcc
+            gcc -o linux-serial-test linux-serial-test.c
+            echo ::set-output name=bin::${binary}
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            ${{ steps.runcmd.outputs.bin}}
