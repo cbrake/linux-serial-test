@@ -17,14 +17,12 @@ jobs:
           # Not required, but speeds up builds
           githubToken: ${{ github.token }}
           run: |
-            binary=linux-serial-test-ubuntu-22.04-armv7-${{ github.ref_name }}
             apt-get update && apt install -y gcc
             gcc -o linux-serial-test linux-serial-test.c
-            echo "{bin}=${binary}" >> $GITHUB_OUTPUT
 
       - name: Release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            ${{ steps.runcmd.outputs.bin}}
+            linux-serial-test
