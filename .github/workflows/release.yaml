@@ -1,4 +1,4 @@
-on: [push, pull_request]
+on: [push]
 
 jobs:
   cross_build:
@@ -21,7 +21,7 @@ jobs:
             gcc -o linux-serial-test linux-serial-test.c
             version=${GITHUB_REF/refs\/tags\//}
             echo $version
-            tar cf linux-serial-test-${version}-linux-arm.tar.gz
+            tar cf linux-serial-test-${version}-linux-arm.tar.gz linux-serial-test LICENCES/*
 
       - name: Release
         uses: softprops/action-gh-release@v1
