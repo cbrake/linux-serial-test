@@ -19,9 +19,12 @@ jobs:
           run: |
             apt-get update && apt install -y gcc
             gcc -o linux-serial-test linux-serial-test.c
-            version=${GITHUB_REF/refs\/tags\//}
-            echo $version
-            tar cf linux-serial-test-${version}-linux-arm.tar.gz linux-serial-test LICENCES/*
+
+            if [ echo $GITHUB_REF | grep -n refs/tags/ ]; then
+              version=${GITHUB_REF/refs\/tags\//}
+              echo $version
+              tar cf linux-serial-test-${version}-linux-arm.tar.gz linux-serial-test LICENCES/*
+            fi
 
       - name: Release
         uses: softprops/action-gh-release@v1
