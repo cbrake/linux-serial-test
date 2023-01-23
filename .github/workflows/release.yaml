@@ -23,7 +23,7 @@ jobs:
             if [[ $(echo $GITHUB_REF | grep -n refs/) ]]; then
               version=${GITHUB_REF/refs\/tags\//}
               echo $version
-              tar cf linux-serial-test-${version}-linux-arm.tar.gz linux-serial-test LICENSES/*
+              tar zcf linux-serial-test-${version}-linux-arm.tar.gz linux-serial-test LICENSES/*
             fi
 
       - name: Release
