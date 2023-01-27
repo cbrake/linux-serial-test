@@ -707,6 +707,8 @@ int main(int argc, char * argv[])
 
 	process_options(argc, argv);
 
+	int wait_time = _cl_tx_wait;
+
 	if (!_cl_port) {
 		fprintf(stderr, "ERROR: Port argument required\n");
 		display_help();
@@ -892,8 +894,9 @@ int main(int argc, char * argv[])
 			}
 		}
 
-		if (_cl_tx_time) {
-			if (current.tv_sec - start_time.tv_sec >= _cl_tx_time) {
+		if (_cl_tx_time & !_cl_tx_wait) {
+			if (current.tv_sec - start_time.tv_sec >= wait_time &&
+			    current.tv_sec - start_time.tv_sec - wait_time >= _cl_tx_time ) {
 				_cl_tx_time = 0;
 				_cl_no_tx = 1;
 				serial_poll.events &= ~POLLOUT;
