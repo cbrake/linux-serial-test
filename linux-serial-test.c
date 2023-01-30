@@ -68,6 +68,7 @@ int _cl_rx_timeout_ms = 2000;
 int _cl_tx_timeout_ms = 2000;
 int _cl_error_on_timeout = 0;
 int _cl_no_icount = 0;
+int _cl_flush_buffers = 0;
 
 // Module variables
 unsigned char _write_count_value = 0;
@@ -301,6 +302,7 @@ static void display_help(void)
 			"  -W, --tx-wait            Number of seconds to wait before to transmit (defaults to 0, meaning no wait)\n"
 			"  -Z, --error-on-timeout   Treat timeouts as errors\n"
 			"  -n, --no-icount          Do not request driver for counts of input serial line interrupts (TIOCGICOUNT)\n"
+			"  -f, --flush-buffers      Flush RX and TX buffers before starting\n"
 			"\n"
 	      );
 }
@@ -309,7 +311,7 @@ static void process_options(int argc, char * argv[])
 {
 	for (;;) {
 		int option_index = 0;
-		static const char *short_options = "hb:p:d:R:TsSy:z:cBertq:Ql:a:w:o:i:P:kKAI:O:W:Zn";
+		static const char *short_options = "hb:p:d:R:TsSy:z:cBertq:Ql:a:w:o:i:P:kKAI:O:W:Zn:f";
 		static const struct option long_options[] = {
 			{"help", no_argument, 0, 0},
 			{"baud", required_argument, 0, 'b'},
@@ -342,6 +344,7 @@ static void process_options(int argc, char * argv[])
 			{"tx-timeout", required_argument, 0, 'O'},
 			{"error-on-timeout", no_argument, 0, 'Z'},
 			{"no-icount", no_argument, 0, 'n'},
+			{"flush-buffers", no_argument, 0, 'f'},
 			{0,0,0,0},
 		};
 
@@ -470,6 +473,9 @@ static void process_options(int argc, char * argv[])
 		case 'n':
 			_cl_no_icount = 1;
 			break;
+		case 'f':
+			_cl_flush_buffers = 1;
+			break;
 		}
 	}
 }
@@ -517,8 +523,8 @@ static void process_read_data(void)
 		for (i = 0; i < c; i++) {
 			if (rb[i] != _read_count_value) {
 				if (_cl_dump_err) {
-					printf("Error, count: %lld, expected %02x, got %02x\n",
-							_read_count + i, _read_count_value, rb[i]);
+					printf("Error, count: %lld, expected %02x, got %02x c %x\n",
+							_read_count + i, _read_count_value, rb[i], c);
 				}
 				_error_count++;
 				if (_cl_stop_on_error) {
@@ -781,6 +787,14 @@ int main(int argc, char * argv[])
 		serial_poll.events |= POLLOUT;
 	} else {
 		serial_poll.events &= ~POLLOUT;
+	}
+
+	if (_cl_flush_buffers) {
+		printf("Flush RX buffer.\n");
+		// Wait 100ms delay to let data arrive before flushing the I/O
+		// buffers. This is a unfortunately a known workaround.
+		usleep(100000);
+		tcflush(_fd, TCIOFLUSH);
 	}
 
 	struct timespec start_time, last_stat, last_timeout, last_read, last_write;
