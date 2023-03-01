@@ -908,7 +908,7 @@ int main(int argc, char * argv[])
 			}
 		}
 
-		if (_cl_tx_time & !_cl_tx_wait) {
+		if (_cl_tx_time && !_cl_tx_wait) {
 			if (current.tv_sec - start_time.tv_sec >= wait_time &&
 			    current.tv_sec - start_time.tv_sec - wait_time >= _cl_tx_time ) {
 				_cl_tx_time = 0;
