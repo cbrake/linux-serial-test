@@ -311,7 +311,7 @@ static void process_options(int argc, char * argv[])
 {
 	for (;;) {
 		int option_index = 0;
-		static const char *short_options = "hb:p:d:R:TsSy:z:cBertq:Ql:a:w:o:i:P:kKAI:O:W:Zn:f";
+		static const char *short_options = "hb:p:d:R:TsSy:z:cBertq:Ql:a:w:o:i:P:kKAI:O:W:Znf";
 		static const struct option long_options[] = {
 			{"help", no_argument, 0, 0},
 			{"baud", required_argument, 0, 'b'},
@@ -321,8 +321,8 @@ static void process_options(int argc, char * argv[])
 			{"detailed_tx", no_argument, 0, 'T'},
 			{"stats", no_argument, 0, 's'},
 			{"stop-on-err", no_argument, 0, 'S'},
-			{"single-byte", no_argument, 0, 'y'},
-			{"second-byte", no_argument, 0, 'z'},
+			{"single-byte", required_argument, 0, 'y'},
+			{"second-byte", required_argument, 0, 'z'},
 			{"rts-cts", no_argument, 0, 'c'},
 			{"2-stop-bit", no_argument, 0, 'B'},
 			{"parity", required_argument, 0, 'P'},
