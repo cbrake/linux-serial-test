@@ -59,6 +59,7 @@ int _cl_tx_bytes = 0;
 int _cl_rs485_after_delay = -1;
 int _cl_rs485_before_delay = 0;
 int _cl_rs485_rts_after_send = 0;
+int _cl_do_not_touch_modem_lines = 0;
 int _cl_tx_time = 0;
 int _cl_rx_time = 0;
 int _cl_tx_wait = 0;
@@ -245,6 +246,9 @@ static int get_baud(int baud)
 
 void set_modem_lines(int fd, int bits, int mask)
 {
+	if (_cl_do_not_touch_modem_lines)
+		return;
+
 	int status, ret;
 
 	if (ioctl(fd, TIOCMGET, &status) < 0) {
@@ -294,6 +298,7 @@ static void display_help(void)
 			"                           bit times. To optionally specify a delay from when the driver is enabled\n"
 			"                           to start of TX use 'after_delay.before_delay' (-q 1.1)\n"
 			"  -Q, --rs485_rts          Deassert RTS on send, assert after send. Omitting -Q inverts this logic.\n"
+			"  -m, --no-modem           Do not clobber against any modem lines.\n"
 			"  -o, --tx-time            Number of seconds to transmit for (defaults to 0, meaning no limit)\n"
 			"  -i, --rx-time            Number of seconds to receive for (defaults to 0, meaning no limit)\n"
 			"  -A, --ascii              Output bytes range from 32 to 126 (default is 0 to 255)\n"
@@ -311,7 +316,7 @@ static void process_options(int argc, char * argv[])
 {
 	for (;;) {
 		int option_index = 0;
-		static const char *short_options = "hb:p:d:R:TsSy:z:cBertq:Ql:a:w:o:i:P:kKAI:O:W:Znf";
+		static const char *short_options = "hb:p:d:R:TsSy:z:cBertq:Qml:a:w:o:i:P:kKAI:O:W:Znf";
 		static const struct option long_options[] = {
 			{"help", no_argument, 0, 0},
 			{"baud", required_argument, 0, 'b'},
@@ -336,6 +341,7 @@ static void process_options(int argc, char * argv[])
 			{"tx-bytes", required_argument, 0, 'w'},
 			{"rs485", required_argument, 0, 'q'},
 			{"rs485_rts", no_argument, 0, 'Q'},
+			{"no-modem", no_argument, 0, 'm'},
 			{"tx-time", required_argument, 0, 'o'},
 			{"rx-time", required_argument, 0, 'i'},
 			{"tx-wait", required_argument, 0, 'W'},
@@ -442,6 +448,9 @@ static void process_options(int argc, char * argv[])
 		}
 		case 'Q':
 			_cl_rs485_rts_after_send = 1;
+			break;
+		case 'm':
+			_cl_do_not_touch_modem_lines = 1;
 			break;
 		case 'o': {
 			char *endptr;
