@@ -663,23 +663,28 @@ static void setup_serial_port(int baud)
 			perror("Error getting RS-485 mode");
 		}
 	} else {
-		if (_cl_rs485_after_delay >= 0) {
-			/* enable RS485 */
-			rs485.flags |= SER_RS485_ENABLED | SER_RS485_RX_DURING_TX |
-				(_cl_rs485_rts_after_send ? SER_RS485_RTS_AFTER_SEND : SER_RS485_RTS_ON_SEND);
-			rs485.flags &= ~(_cl_rs485_rts_after_send ? SER_RS485_RTS_ON_SEND : SER_RS485_RTS_AFTER_SEND);
-			rs485.delay_rts_after_send = _cl_rs485_after_delay;
-			rs485.delay_rts_before_send = _cl_rs485_before_delay;
-			if(ioctl(_fd, TIOCSRS485, &rs485) < 0) {
-				perror("Error setting RS-485 mode");
-			}
+		if (rs485.flags & SER_RS485_ENABLED) {
+			printf("RS485 already enabled on port, ignoring delays if set\n");
+			//FIXME when running with --rs485 it does not send?!
 		} else {
-			/* disable RS485 */
-			rs485.flags &= ~(SER_RS485_ENABLED | SER_RS485_RTS_ON_SEND | SER_RS485_RTS_AFTER_SEND);
-			rs485.delay_rts_after_send = 0;
-			rs485.delay_rts_before_send = 0;
-			if(ioctl(_fd, TIOCSRS485, &rs485) < 0) {
-				perror("Error setting RS-232 mode");
+			if (_cl_rs485_after_delay >= 0) {
+				/* enable RS485 */
+				rs485.flags |= SER_RS485_ENABLED | SER_RS485_RX_DURING_TX |
+					(_cl_rs485_rts_after_send ? SER_RS485_RTS_AFTER_SEND : SER_RS485_RTS_ON_SEND);
+				rs485.flags &= ~(_cl_rs485_rts_after_send ? SER_RS485_RTS_ON_SEND : SER_RS485_RTS_AFTER_SEND);
+				rs485.delay_rts_after_send = _cl_rs485_after_delay;
+				rs485.delay_rts_before_send = _cl_rs485_before_delay;
+				if(ioctl(_fd, TIOCSRS485, &rs485) < 0) {
+					perror("Error setting RS-485 mode");
+				}
+			} else {
+				/* disable RS485 */
+				rs485.flags &= ~(SER_RS485_ENABLED | SER_RS485_RTS_ON_SEND | SER_RS485_RTS_AFTER_SEND);
+				rs485.delay_rts_after_send = 0;
+				rs485.delay_rts_before_send = 0;
+				if(ioctl(_fd, TIOCSRS485, &rs485) < 0) {
+					perror("Error setting RS-232 mode");
+				}
 			}
 		}
 	}
