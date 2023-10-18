@@ -738,6 +738,7 @@ int main(int argc, char * argv[])
 	printf("Linux serial test app\n");
 
 	signal(SIGINT, sigint_handler);
+	signal(SIGTERM, sigint_handler);
 	atexit(&exit_handler); //FIXME seems not to work for SIGINT without further additions like the previous signal handler
 
 	process_options(argc, argv);
