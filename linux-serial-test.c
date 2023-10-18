@@ -17,6 +17,7 @@
 #include <linux/serial.h>
 #include <errno.h>
 #include <sys/file.h>
+#include <signal.h>
 
 /*
  * glibc for MIPS has its own bits/termios.h which does not define
@@ -83,8 +84,22 @@ long long int _write_count = 0;
 long long int _read_count = 0;
 long long int _error_count = 0;
 
+volatile sig_atomic_t sigint_received = 0;
+void sigint_handler(int s)
+{
+  sigint_received += 1;
+  if (sigint_received > 3) {
+	exit(-1);
+  }
+}
+
 static void exit_handler(void)
 {
+	//FIXME This part is NEVER reached when stopping an endless run (i.e. no -r, no -o set) with SIGINT ?
+	printf("Exit handler: Cleaning up ...\n");
+//	set_modem_lines(_fd, 0, TIOCM_LOOP); // TODO if do it here, move def!!
+	tcflush(_fd, TCIOFLUSH);
+
 	if (_fd >= 0) {
 		flock(_fd, LOCK_UN);
 		close(_fd);
@@ -665,7 +680,6 @@ static void setup_serial_port(int baud)
 	} else {
 		if (rs485.flags & SER_RS485_ENABLED) {
 			printf("RS485 already enabled on port, ignoring delays if set\n");
-			//FIXME when running with --rs485 it does not send?!
 		} else {
 			if (_cl_rs485_after_delay >= 0) {
 				/* enable RS485 */
@@ -723,7 +737,9 @@ int main(int argc, char * argv[])
 {
 	printf("Linux serial test app\n");
 
-	atexit(&exit_handler);
+	signal(SIGINT, sigint_handler);
+	signal(SIGTERM, sigint_handler);
+	atexit(&exit_handler); //FIXME seems not to work for SIGINT without further additions like the previous signal handler
 
 	process_options(argc, argv);
 
@@ -822,7 +838,7 @@ int main(int argc, char * argv[])
 	if (_cl_tx_wait)
 		serial_poll.events &= ~POLLOUT;
 
-	while (!(_cl_no_rx && _cl_no_tx)) {
+	while (!(_cl_no_rx && _cl_no_tx) && !sigint_received ) {
 		struct timespec current;
 		int retval = poll(&serial_poll, 1, 1000);
 
@@ -942,10 +958,12 @@ int main(int argc, char * argv[])
 		}
 	}
 
+	//FIXME rs485 RTS not reset on SIGINT as this part is also NEVER reached (like exit_handler)?!
+	printf("Terminating ...\n");
 	tcdrain(_fd);
 	dump_serial_port_stats();
-	set_modem_lines(_fd, 0, TIOCM_LOOP);
-	tcflush(_fd, TCIOFLUSH);
+	set_modem_lines(_fd, 0, TIOCM_LOOP); //TODO undecided
+	// tcflush(_fd, TCIOFLUSH); //move to exit_handler
 
 	return compute_error_count();
 }
