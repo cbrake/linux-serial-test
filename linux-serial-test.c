@@ -17,6 +17,7 @@
 #include <linux/serial.h>
 #include <errno.h>
 #include <sys/file.h>
+#include <signal.h>
 
 /*
  * glibc for MIPS has its own bits/termios.h which does not define
@@ -83,8 +84,22 @@ long long int _write_count = 0;
 long long int _read_count = 0;
 long long int _error_count = 0;
 
+volatile sig_atomic_t sigint_received = 0;
+void sigint_handler(int s)
+{
+	sigint_received += 1;
+
+	//if it hangs in the loop or afterwards, this one gives the opportunity to stop right away
+	if (sigint_received > 3) {
+		exit(-1);
+	}
+}
+
 static void exit_handler(void)
 {
+	printf("Exit handler: Cleaning up ...\n");
+	tcflush(_fd, TCIOFLUSH);
+
 	if (_fd >= 0) {
 		flock(_fd, LOCK_UN);
 		close(_fd);
@@ -309,7 +324,7 @@ static void display_help(void)
 			"  -n, --no-icount          Do not request driver for counts of input serial line interrupts (TIOCGICOUNT)\n"
 			"  -f, --flush-buffers      Flush RX and TX buffers before starting\n"
 			"\n"
-	      );
+		);
 }
 
 static void process_options(int argc, char * argv[])
@@ -665,7 +680,6 @@ static void setup_serial_port(int baud)
 	} else {
 		if (rs485.flags & SER_RS485_ENABLED) {
 			printf("RS485 already enabled on port, ignoring delays if set\n");
-			//FIXME when running with --rs485 it does not send?!
 		} else {
 			if (_cl_rs485_after_delay >= 0) {
 				/* enable RS485 */
@@ -723,7 +737,9 @@ int main(int argc, char * argv[])
 {
 	printf("Linux serial test app\n");
 
-	atexit(&exit_handler);
+	signal(SIGINT, sigint_handler);
+	signal(SIGTERM, sigint_handler);
+	atexit(&exit_handler); //does not work for SIGINT/SIGTERM without the previous signal handlers
 
 	process_options(argc, argv);
 
@@ -822,7 +838,7 @@ int main(int argc, char * argv[])
 	if (_cl_tx_wait)
 		serial_poll.events &= ~POLLOUT;
 
-	while (!(_cl_no_rx && _cl_no_tx)) {
+	while (!(_cl_no_rx && _cl_no_tx) && !sigint_received ) {
 		struct timespec current;
 		int retval = poll(&serial_poll, 1, 1000);
 
@@ -924,7 +940,7 @@ int main(int argc, char * argv[])
 
 		if (_cl_tx_time && !_cl_tx_wait) {
 			if (current.tv_sec - start_time.tv_sec >= wait_time &&
-			    current.tv_sec - start_time.tv_sec - wait_time >= _cl_tx_time ) {
+				current.tv_sec - start_time.tv_sec - wait_time >= _cl_tx_time ) {
 				_cl_tx_time = 0;
 				_cl_no_tx = 1;
 				serial_poll.events &= ~POLLOUT;
@@ -942,10 +958,10 @@ int main(int argc, char * argv[])
 		}
 	}
 
+	printf("Terminating ...\n");
 	tcdrain(_fd);
 	dump_serial_port_stats();
-	set_modem_lines(_fd, 0, TIOCM_LOOP);
-	tcflush(_fd, TCIOFLUSH);
+	set_modem_lines(_fd, 0, TIOCM_LOOP); //seems not to be relevant for RTS reset
 
 	return compute_error_count();
 }
