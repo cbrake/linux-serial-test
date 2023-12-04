@@ -533,34 +533,44 @@ static unsigned char next_count_value(unsigned char c)
 static void process_read_data(void)
 {
 	unsigned char rb[1024];
-	int c = read(_fd, &rb, sizeof(rb));
-	if (c > 0) {
-		if (_cl_rx_dump) {
-			if (_cl_rx_dump_ascii)
-				dump_data_ascii(rb, c);
-			else
-				dump_data(rb, c);
-		}
-
-		// verify read count is incrementing
-		int i;
-		for (i = 0; i < c; i++) {
-			if (rb[i] != _read_count_value) {
-				if (_cl_dump_err) {
-					printf("Error, count: %lld, expected %02x, got %02x c %x\n",
-							_read_count + i, _read_count_value, rb[i], c);
-				}
-				_error_count++;
-				if (_cl_stop_on_error) {
-					dump_serial_port_stats();
-					exit(-EIO);
-				}
-				_read_count_value = rb[i];
+	int actual_read_count = 0;
+	while (actual_read_count < 1024) {
+		int c = read(_fd, &rb, sizeof(rb));
+		if (c > 0) {
+			if (_cl_rx_dump) {
+				if (_cl_rx_dump_ascii)
+					dump_data_ascii(rb, c);
+				else
+					dump_data(rb, c);
 			}
-			_read_count_value = next_count_value(_read_count_value);
+
+			// verify read count is incrementing
+			int i;
+			for (i = 0; i < c; i++) {
+				if (rb[i] != _read_count_value) {
+					if (_cl_dump_err) {
+						printf("Error, count: %lld, expected %02x, got %02x c %x\n",
+							_read_count + i, _read_count_value, rb[i], c);
+					}
+					_error_count++;
+					if (_cl_stop_on_error) {
+						dump_serial_port_stats();
+						exit(-EIO);
+					}
+					_read_count_value = rb[i];
+				}
+				_read_count_value = next_count_value(_read_count_value);
+			}
+			_read_count += c;
+			actual_read_count += c;
+		} else if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) {
+			perror("read failed");
+			continue; // Retry the read
+		} else {
+		    break;
 		}
-		_read_count += c;
 	}
+	printf("Read %d bytes\n", actual_read_count);
 }
 
 static void process_write_data(void)
