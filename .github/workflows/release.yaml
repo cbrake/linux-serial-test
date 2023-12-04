@@ -4,14 +4,21 @@ jobs:
   cross_build:
     # The host should always be linux
     runs-on: ubuntu-22.04
-    name: Build for armv7
+    name: Build for ${{ matrix.arch }}
+
+    # Run steps on a matrix of 4 arch/distro combinations
+    strategy:
+      matrix:
+        include:
+          - arch: aarch64
+          - arch: armv7
     steps:
       - uses: actions/checkout@v3
       - uses: uraimo/run-on-arch-action@v2
         name: Build artifact
         id: build
         with:
-          arch: armv7
+          arch: ${{ matrix.arch }}
           distro: ubuntu18.04
 
           # Not required, but speeds up builds
@@ -23,7 +30,7 @@ jobs:
             if [[ $(echo $GITHUB_REF | grep -n refs/) ]]; then
               version=${GITHUB_REF/refs\/tags\//}
               echo $version
-              tar zcf linux-serial-test-${version}-linux-arm.tar.gz linux-serial-test LICENSES/*
+              tar zcf linux-serial-test-${version}-linux-${{ matrix.arch }}.tar.gz linux-serial-test LICENSES/*
             fi
 
       - name: Release
