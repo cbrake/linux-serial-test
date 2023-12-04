@@ -6,7 +6,6 @@ jobs:
     runs-on: ubuntu-22.04
     name: Build for ${{ matrix.arch }}
 
-    # Run steps on a matrix of 4 arch/distro combinations
     strategy:
       matrix:
         include:
