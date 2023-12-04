@@ -27,9 +27,9 @@ jobs:
             apt-get update && apt install -y gcc
             gcc -o linux-serial-test linux-serial-test.c
 
-            if [[ $(echo $GITHUB_REF | grep -n refs/) ]]; then
+            if [[ $(echo $GITHUB_REF | grep -n refs/tags/v) ]]; then
               version=${GITHUB_REF/refs\/tags\//}
-              echo $version
+              echo "GITHUB_REF=${GITHUB_REF} VERSION=${version}"
               tar zcf linux-serial-test-${version}-linux-${{ matrix.arch }}.tar.gz linux-serial-test LICENSES/*
             fi
 
