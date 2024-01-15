@@ -41,6 +41,7 @@ int _cl_divisor = 0;
 int _cl_rx_dump = 0;
 int _cl_rx_dump_ascii = 0;
 int _cl_tx_detailed = 0;
+int _cl_rx_detailed = 0;
 int _cl_stats = 0;
 int _cl_stop_on_error = 0;
 int _cl_single_byte = -1;
@@ -289,8 +290,9 @@ static void display_help(void)
 			"  -b, --baud               Baud rate, 115200, etc (115200 is default)\n"
 			"  -p, --port               Port (/dev/ttyS0, etc) (must be specified)\n"
 			"  -d, --divisor            UART Baud rate divisor (can be used to set custom baud rates)\n"
-			"  -R, --rx_dump            Dump Rx data (ascii, raw)\n"
+			"  -D, --rx_dump            Dump Rx data (ascii, raw)\n"
 			"  -T, --detailed_tx        Detailed Tx data\n"
+			"  -R, --detailed_rx        Detailed Rx data\n"
 			"  -s, --stats              Dump serial port stats every 5s\n"
 			"  -S, --stop-on-err        Stop program if we encounter an error\n"
 			"  -y, --single-byte        Send specified byte to the serial port\n"
@@ -331,14 +333,15 @@ static void process_options(int argc, char * argv[])
 {
 	for (;;) {
 		int option_index = 0;
-		static const char *short_options = "hb:p:d:R:TsSy:z:cBertq:Qml:a:w:o:i:P:kKAI:O:W:Znf";
+		static const char *short_options = "hb:p:d:D:TRsSy:z:cBertq:Qml:a:w:o:i:P:kKAI:O:W:Znf";
 		static const struct option long_options[] = {
 			{"help", no_argument, 0, 0},
 			{"baud", required_argument, 0, 'b'},
 			{"port", required_argument, 0, 'p'},
 			{"divisor", required_argument, 0, 'd'},
-			{"rx_dump", required_argument, 0, 'R'},
+			{"rx_dump", required_argument, 0, 'D'},
 			{"detailed_tx", no_argument, 0, 'T'},
+			{"detailed_rx", no_argument, 0, 'R'},
 			{"stats", no_argument, 0, 's'},
 			{"stop-on-err", no_argument, 0, 'S'},
 			{"single-byte", required_argument, 0, 'y'},
@@ -391,12 +394,15 @@ static void process_options(int argc, char * argv[])
 		case 'd':
 			_cl_divisor = strtol(optarg, NULL, 0);
 			break;
-		case 'R':
+		case 'D':
 			_cl_rx_dump = 1;
 			_cl_rx_dump_ascii = !strcmp(optarg, "ascii");
 			break;
 		case 'T':
 			_cl_tx_detailed = 1;
+			break;
+		case 'R':
+			_cl_rx_detailed = 1;
 			break;
 		case 's':
 			_cl_stats = 1;
@@ -563,14 +569,18 @@ static void process_read_data(void)
 			}
 			_read_count += c;
 			actual_read_count += c;
-		} else if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) {
-			perror("read failed");
+		} else if (errno) {
+			if (errno != EAGAIN) {
+				perror("read failed");
+			}
 			continue; // Retry the read
 		} else {
 		    break;
 		}
 	}
-	printf("Read %d bytes\n", actual_read_count);
+	if (_cl_rx_detailed) {
+		printf("Read %d bytes\n", actual_read_count);
+	}
 }
 
 static void process_write_data(void)
