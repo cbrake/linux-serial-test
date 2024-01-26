@@ -72,6 +72,7 @@ int _cl_tx_timeout_ms = 2000;
 int _cl_error_on_timeout = 0;
 int _cl_no_icount = 0;
 int _cl_flush_buffers = 0;
+int _cl_stats_start = 0;
 
 // Module variables
 unsigned char _write_count_value = 0;
@@ -325,6 +326,7 @@ static void display_help(void)
 			"  -Z, --error-on-timeout   Treat timeouts as errors\n"
 			"  -n, --no-icount          Do not request driver for counts of input serial line interrupts (TIOCGICOUNT)\n"
 			"  -f, --flush-buffers      Flush RX and TX buffers before starting\n"
+			"  -g, --stats-start        Print TIOCGICOUNT stats on script startup before sending or receiveing data\n"
 			"\n"
 		);
 }
@@ -369,6 +371,7 @@ static void process_options(int argc, char * argv[])
 			{"error-on-timeout", no_argument, 0, 'Z'},
 			{"no-icount", no_argument, 0, 'n'},
 			{"flush-buffers", no_argument, 0, 'f'},
+			{"stats-start", no_argument, 0, 'g'},
 			{0,0,0,0},
 		};
 
@@ -505,6 +508,9 @@ static void process_options(int argc, char * argv[])
 			break;
 		case 'f':
 			_cl_flush_buffers = 1;
+			break;
+		case 'g':
+			_cl_stats_start = 1;
 			break;
 		}
 	}
@@ -791,6 +797,9 @@ int main(int argc, char * argv[])
 	}
 
 	set_modem_lines(_fd, _cl_loopback ? TIOCM_LOOP : 0, TIOCM_LOOP);
+
+	if(_cl_stats_start)
+		dump_serial_port_stats();
 
 	if (_cl_single_byte >= 0) {
 		unsigned char data[2];
