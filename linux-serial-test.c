@@ -58,6 +58,7 @@ int _cl_no_tx = 0;
 int _cl_rx_delay = 0;
 int _cl_tx_delay = 0;
 int _cl_tx_bytes = 0;
+int _cl_rx_bytes_threash = 0;
 int _cl_rs485_after_delay = -1;
 int _cl_rs485_before_delay = 0;
 int _cl_rs485_rts_after_send = 0;
@@ -79,6 +80,7 @@ unsigned char _read_count_value = 0;
 int _fd = -1;
 unsigned char * _write_data;
 ssize_t _write_size;
+ssize_t _read_size_threash;
 
 // keep our own counts for cases where the driver stats don't work
 long long int _write_count = 0;
@@ -310,6 +312,7 @@ static void display_help(void)
 			"  -a, --tx-delay           Delay between writing data (ms)\n"
 			"  -w, --tx-bytes           Number of bytes for each write (default is to repeatedly write 1024 bytes\n"
 			"                           until no more are accepted)\n"
+			"  -M, --rx-bytes-threash   Read threashold, continue to next operation after reading this many bytes\n"
 			"  -q, --rs485              Enable RS485 direction control on port, and set delay from when TX is\n"
 			"                           finished and RS485 driver enable is de-asserted. Delay is specified in\n"
 			"                           bit times. To optionally specify a delay from when the driver is enabled\n"
@@ -357,6 +360,7 @@ static void process_options(int argc, char * argv[])
 			{"rx-delay", required_argument, 0, 'l'},
 			{"tx-delay", required_argument, 0, 'a'},
 			{"tx-bytes", required_argument, 0, 'w'},
+			{"rx-bytes-threash", required_argument, 0, 'M'},
 			{"rs485", required_argument, 0, 'q'},
 			{"rs485_rts", no_argument, 0, 'Q'},
 			{"no-modem", no_argument, 0, 'm'},
@@ -461,6 +465,11 @@ static void process_options(int argc, char * argv[])
 			_cl_tx_bytes = strtol(optarg, &endptr, 0);
 			break;
 		}
+		case 'M': {
+			char *endptr;
+			_cl_rx_bytes_threash = strtol(optarg, &endptr, 0);
+			break;
+		}
 		case 'q': {
 			char *endptr;
 			_cl_rs485_after_delay = strtol(optarg, &endptr, 0);
@@ -540,7 +549,7 @@ static void process_read_data(void)
 {
 	unsigned char rb[1024];
 	int actual_read_count = 0;
-	while (actual_read_count < 1024) {
+	while (actual_read_count < _read_size_threash) {
 		int c = read(_fd, &rb, sizeof(rb));
 		if (c > 0) {
 			if (_cl_rx_dump) {
@@ -814,6 +823,7 @@ int main(int argc, char * argv[])
 	}
 
 	_write_size = (_cl_tx_bytes == 0) ? 1024 : _cl_tx_bytes;
+	_read_size_threash = (_cl_rx_bytes_threash == 0) ? 1024 : _cl_rx_bytes_threash;
 
 	_write_data = malloc(_write_size);
 	if (_write_data == NULL) {
