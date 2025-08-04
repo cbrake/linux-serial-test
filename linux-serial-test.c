@@ -55,6 +55,8 @@ int _cl_loopback = 0;
 int _cl_dump_err = 0;
 int _cl_no_rx = 0;
 int _cl_no_tx = 0;
+int _cl_no_rx_param = 0;
+int _cl_no_tx_param = 0;
 int _cl_rx_delay = 0;
 int _cl_tx_delay = 0;
 int _cl_tx_bytes = 0;
@@ -442,9 +444,11 @@ static void process_options(int argc, char * argv[])
 			break;
 		case 'r':
 			_cl_no_rx = 1;
+			_cl_no_rx_param = 1;
 			break;
 		case 't':
 			_cl_no_tx = 1;
+			_cl_no_tx_param = 1;
 			break;
 		case 'l': {
 			char *endptr;
@@ -745,7 +749,7 @@ static int diff_s(const struct timespec *t1, const struct timespec *t2)
 static int compute_error_count(void)
 {
 	long long int result;
-	if (_cl_no_rx == 1 || _cl_no_tx == 1)
+	if (_cl_no_rx_param == 1 || _cl_no_tx_param == 1)
 		result = _error_count;
 	else
 		result = llabs(_write_count - _read_count) + _error_count;
