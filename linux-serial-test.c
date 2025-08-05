@@ -543,8 +543,13 @@ static unsigned char next_count_value(unsigned char c)
 static void process_read_data(void)
 {
 	unsigned char rb[1024];
+	int loopcounter = 0;
 	int actual_read_count = 0;
-	while (actual_read_count < 1024) {
+	int expected_read_count = _cl_tx_bytes == 0 ? 1024 : _cl_tx_bytes;
+	/* time for one char at current baudrate in us */
+	int chartime = 1000000 * (8 + _cl_parity + 1 + _cl_2_stop_bit) / _cl_baud;
+
+	while (actual_read_count < expected_read_count) {
 		int c = read(_fd, &rb, sizeof(rb));
 		if (c > 0) {
 			if (_cl_rx_dump) {
@@ -577,7 +582,12 @@ static void process_read_data(void)
 			if (errno != EAGAIN) {
 				perror("read failed");
 			}
-			continue; // Retry the read
+
+			if (loopcounter++ < expected_read_count) {
+				usleep(chartime);
+				continue; // Retry the read
+			}
+			break;
 		} else {
 		    break;
 		}
