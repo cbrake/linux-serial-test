@@ -18,6 +18,11 @@
 #include <errno.h>
 #include <sys/file.h>
 #include <signal.h>
+#include <stdbool.h>
+#include <locale.h>		/* For numeric grouping commas to mark thousands  */
+#include <assert.h>		/* For sanity checking */
+
+#include "setbaudrate.h"	/* For set_custom_baud() via termios2 */
 
 /*
  * glibc for MIPS has its own bits/termios.h which does not define
@@ -79,6 +84,10 @@ unsigned char _read_count_value = 0;
 int _fd = -1;
 unsigned char * _write_data;
 ssize_t _write_size;
+int _e_baud = 0;
+int _ss_baud_base = 0;
+int _ss_custom_divisor = 0;
+bool _is_standard_baud = 0;
 
 // keep our own counts for cases where the driver stats don't work
 long long int _write_count = 0;
@@ -96,14 +105,90 @@ void sigint_handler(int s)
 	}
 }
 
+static int bitsperframe() {
+	/* bits per frame = data bits, + start bit + stop bit + parity bit if used. */
+	int data_bits = 8;
+	int start_bit = 1;
+	int stop_bits = 1 + _cl_2_stop_bit;
+	int parity_bit = _cl_parity;
+
+	return data_bits + start_bit + stop_bits + parity_bit;
+}
+
+static int disable_closing_wait()
+{
+	// Disable Linux's 30 second wait for close() at slow baudrates.
+	// (For no apparent reason, Linux requires root permissions for this.)
+	unsigned short oldcw = 3000;
+	struct serial_struct ss;
+	int eta = 999999999;
+
+	// Don't bother trying if it won't take long to drain.
+	int baud = _e_baud?_e_baud:_cl_baud;
+	if (baud) {
+		eta = ( _write_count - _read_count) * bitsperframe() / baud;
+	}
+	if (eta <= 2) {
+		return -1;
+	}
+
+	if (ioctl(_fd, TIOCGSERIAL, &ss) < 0) {
+		// return silently as some devices do not support TIOCGSERIAL
+		return -1;
+	}
+
+	oldcw = ss.closing_wait;
+	if (oldcw == ASYNC_CLOSING_WAIT_NONE) {
+		return -1;
+	}
+
+	ss.closing_wait = ASYNC_CLOSING_WAIT_NONE;
+	if (ioctl(_fd, TIOCSSERIAL, &ss) < 0) {
+		perror("TIOCSSERIAL ASYNC_CLOSING_WAIT_NONE");
+		fprintf(stderr, "Estimated time to drain: %d seconds", eta);
+		if (eta > oldcw/100) {
+			fprintf(stderr, " (closing_wait max is %ds)", oldcw/100);
+		}
+		fprintf(stderr, "\n");
+		return -1;
+	}
+
+	return oldcw;
+}
+
+static void reenable_closing_wait(unsigned short oldcw)
+{
+	// Re-open the serial port temporarily and reset closing_wait
+	struct serial_struct ss;
+
+	int fd = open(_cl_port, O_RDWR | O_NONBLOCK);
+	if (ioctl(fd, TIOCGSERIAL, &ss) >= 0) {
+		ss.closing_wait = oldcw;
+		if (ioctl(fd, TIOCSSERIAL, &ss) < 0) {
+			int ret = -errno;
+			perror("TIOCSSERIAL reenable closing wait");
+			exit(ret);
+		}
+	}
+	close(fd);
+}
+
+static void close_no_waiting(int fd) {
+	int oldcw = disable_closing_wait();
+	close(fd);
+	if (oldcw >= 0) {
+		reenable_closing_wait(oldcw);
+	}
+}
+
 static void exit_handler(void)
 {
 	printf("Exit handler: Cleaning up ...\n");
-	tcflush(_fd, TCIOFLUSH);
 
 	if (_fd >= 0) {
+		tcflush(_fd, TCIOFLUSH);
+		close_no_waiting(_fd);
 		flock(_fd, LOCK_UN);
-		close(_fd);
 	}
 
 	if (_cl_port) {
@@ -136,18 +221,34 @@ static void dump_data_ascii(unsigned char * b, int count)
 	}
 }
 
+/* setserial's TIOCSSERIAL with custom_divisor is deprecated. Use termios2 instead. */
 static void set_baud_divisor(int speed, int custom_divisor)
 {
 	// default baud was not found, so try to set a custom divisor
 	struct serial_struct ss;
 	int ret;
-
-	if (ioctl(_fd, TIOCGSERIAL, &ss) < 0) {
+ 
+	/* Note: this change affects the *next* open() of the serial port! */
+	/* This is just a temporary open() */
+	int fd=open(_cl_port, O_RDWR | O_NONBLOCK);
+	if (fd < 0) {
 		ret = -errno;
-		perror("TIOCGSERIAL failed");
+		perror("Error opening serial port in set_baud_divisor");
 		exit(ret);
 	}
 
+	if (ioctl(fd, TIOCGSERIAL, &ss) < 0) {
+		ret = -errno;
+		perror("TIOCGSERIAL in set_baud_divisor failed");
+		exit(ret);
+	}
+
+	if (ss.baud_base == 0) {
+		fprintf(stderr, "Cannot set custom divsor as baud_base is not set\n");
+		exit(-EINVAL);
+	}		
+
+	/* Note: SPD is deprecated, but we still want to be able to test it */
 	ss.flags = (ss.flags & ~ASYNC_SPD_MASK) | ASYNC_SPD_CUST;
 	if (custom_divisor) {
 		ss.custom_divisor = custom_divisor;
@@ -164,11 +265,20 @@ static void set_baud_divisor(int speed, int custom_divisor)
 				ss.custom_divisor);
 	}
 
-	if (ioctl(_fd, TIOCSSERIAL, &ss) < 0) {
+	if (ioctl(fd, TIOCSSERIAL, &ss) < 0) {
 		ret = -errno;
 		perror("TIOCSSERIAL failed");
 		exit(ret);
 	}
+
+	close(fd);
+
+	/* Stash the baudrate etc for printing later */
+	_ss_baud_base = ss.baud_base;
+	_ss_custom_divisor = ss.custom_divisor;
+	_cl_baud = ss.baud_base / ss.custom_divisor;
+//	printf("Custom divisor of %'i / %i = %'i baud\n",
+//	       ss.baud_base, ss.custom_divisor, _cl_baud);
 }
 
 static void clear_custom_speed_flag()
@@ -510,6 +620,40 @@ static void process_options(int argc, char * argv[])
 	}
 }
 
+static void print_requested_baudrate() {
+	printf("REQUESTED BAUDRATE: ");
+	printf(_is_standard_baud?"B":" ");
+	printf("%'12d", _cl_baud);
+	if (_error_count)
+		printf("\t!UNRELIABLE!");
+	printf("\n");
+	if (_ss_custom_divisor) {
+		printf("\t\t   = %'12d / %d custom divisor\n",
+		       _ss_baud_base, _ss_custom_divisor);
+	}
+}	
+
+double _errpercent = 0;
+static void print_estimated_baudrate(double duration) {
+	int rx = _read_count;
+	int bits = bitsperframe();
+	double estimated = rx * bits / duration;
+        _errpercent =  ( 100.0*(_cl_baud - estimated) / _cl_baud );
+	if (_errpercent<0) _errpercent=-_errpercent;
+	printf("ESTIMATED BAUDRATE: %'16.2f", rx * bits / duration);
+	if ( _errpercent >= 1.0 )
+		printf("\t!+/- %.2f%% !", _errpercent);
+	printf("\n");
+	printf("\t(%d frames, %d bits each, received in %.2f seconds)\n",
+	       rx, bits, duration);
+}	
+
+static double estimated_baudrate(double duration) {
+	int rx = _read_count;
+	int bits = bitsperframe();
+	return rx * bits / duration;
+}	
+
 static void dump_serial_port_stats(void)
 {
 	struct serial_icounter_struct icount = { 0 };
@@ -538,10 +682,11 @@ static unsigned char next_count_value(unsigned char c)
 
 static void process_read_data(void)
 {
-	unsigned char rb[1024];
+	const int RBSIZE = 1024;
+	unsigned char rb[RBSIZE];
 	int actual_read_count = 0;
-	while (actual_read_count < 1024) {
-		int c = read(_fd, &rb, sizeof(rb));
+	while (actual_read_count < RBSIZE) {
+		int c = read(_fd, &rb, (RBSIZE-actual_read_count));
 		if (c > 0) {
 			if (_cl_rx_dump) {
 				if (_cl_rx_dump_ascii)
@@ -569,17 +714,13 @@ static void process_read_data(void)
 			}
 			_read_count += c;
 			actual_read_count += c;
-		} else if (errno) {
-			if (errno != EAGAIN) {
-				perror("read failed");
-			}
-			continue; // Retry the read
 		} else {
-		    break;
+			break; // Do not continue! We already loop on reading.
 		}
 	}
 	if (_cl_rx_detailed) {
-		printf("Read %d bytes\n", actual_read_count);
+		printf("Read %d bytes %s\n", actual_read_count,
+		       (actual_read_count < RBSIZE)?"":"(buffer limit)");
 	}
 }
 
@@ -639,8 +780,9 @@ static void setup_serial_port(int baud)
 	struct serial_rs485 rs485;
 	int ret;
 
-	_fd = open(_cl_port, O_RDWR | O_NONBLOCK);
+	assert (_fd < 0);
 
+	_fd = open(_cl_port, O_RDWR | O_NONBLOCK);
 	if (_fd < 0) {
 		ret = -errno;
 		perror("Error opening serial port");
@@ -654,10 +796,20 @@ static void setup_serial_port(int baud)
 		exit(ret);
 	}
 
-	bzero(&newtio, sizeof(newtio)); /* clear struct for new port settings */
-
+	tcgetattr(_fd,&newtio);			/* get current port settings  */
 	/* man termios get more info on below settings */
 	newtio.c_cflag = baud | CS8 | CLOCAL | CREAD;
+
+	if (cfsetispeed (&newtio, baud)) {
+		ret = -errno;
+		perror("cfsetispeed");
+		exit(ret);
+	}
+	if (cfsetospeed (&newtio, baud)) {
+		ret = -errno;
+		perror("cfsetospeed");
+		exit(ret);
+	}
 
 	if (_cl_rts_cts) {
 		newtio.c_cflag |= CRTSCTS;
@@ -755,6 +907,7 @@ static int compute_error_count(void)
 
 int main(int argc, char * argv[])
 {
+	setlocale(LC_ALL, "");
 	printf("Linux serial test app\n");
 
 	signal(SIGINT, sigint_handler);
@@ -776,12 +929,24 @@ int main(int argc, char * argv[])
 	if (_cl_baud && !_cl_divisor)
 		baud = get_baud(_cl_baud);
 
-	if (baud <= 0 || _cl_divisor) {
-		printf("NOTE: non standard baud rate, trying custom divisor\n");
+	/* Three different ways of calling setup_serial_port? This could be cleaner. */
+	if (_cl_divisor) {
+		/* -d custom divisor flag was given. */
+		set_baud_divisor(_cl_baud, _cl_divisor);
 		baud = B38400;
 		setup_serial_port(B38400);
-		set_baud_divisor(_cl_baud, _cl_divisor);
+	} else if (baud <= 0) {
+		/* _cl_baud was specified and is not one of the predefined baudrates. */
+		setup_serial_port(B0);
+		if (set_custom_baud(_fd, _cl_baud)) {
+			printf("NOTE: termios2 failed to set non-standard baudrate, approximating using divisor\n");
+			set_baud_divisor(_cl_baud, _cl_divisor);
+			baud = B38400;
+			setup_serial_port(B38400);
+		}
 	} else {
+		/* The typical situation, baudrate is something normal like 115200 */
+		_is_standard_baud = 1; 			/* Stashaway for printing out later */
 		setup_serial_port(baud);
 		/*
 		 * The flag ASYNC_SPD_CUST might have already been set, so
@@ -979,9 +1144,12 @@ int main(int argc, char * argv[])
 	}
 
 	printf("Terminating ...\n");
-	tcdrain(_fd);
+	tcflush(_fd, TCIOFLUSH);
 	dump_serial_port_stats();
+	print_requested_baudrate();
+	print_estimated_baudrate(diff_ms(&last_read, &start_time)/1000.0);
+	_e_baud = estimated_baudrate(diff_ms(&last_read, &start_time)/1000.0);
 	set_modem_lines(_fd, 0, TIOCM_LOOP); //seems not to be relevant for RTS reset
 
-	return compute_error_count();
+	return compute_error_count() || (_errpercent>1.0);
 }
