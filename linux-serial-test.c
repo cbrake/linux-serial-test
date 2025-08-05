@@ -244,7 +244,7 @@ static void set_baud_divisor(int speed, int custom_divisor)
 	}
 
 	if (ss.baud_base == 0) {
-		fprintf(stderr, "Cannot set custom divsor as baud_base is not set\n");
+		fprintf(stderr, "Cannot set custom divisor as baud_base is zero\n");
 		exit(-EINVAL);
 	}		
 
