@@ -962,7 +962,7 @@ int main(int argc, char * argv[])
 		}
 		written = write(_fd, &data, bytes);
 		if (written < 0) {
-			int ret = errno;
+			int ret = -errno;
 			perror("write()");
 			exit(ret);
 		} else if (written != bytes) {
