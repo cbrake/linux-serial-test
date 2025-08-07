@@ -684,43 +684,37 @@ static void process_read_data(void)
 {
 	const int RBSIZE = 1024;
 	unsigned char rb[RBSIZE];
-	int actual_read_count = 0;
-	while (actual_read_count < RBSIZE) {
-		int c = read(_fd, &rb, (RBSIZE-actual_read_count));
-		if (c > 0) {
-			if (_cl_rx_dump) {
-				if (_cl_rx_dump_ascii)
-					dump_data_ascii(rb, c);
-				else
-					dump_data(rb, c);
-			}
-
-			// verify read count is incrementing
-			int i;
-			for (i = 0; i < c; i++) {
-				if (rb[i] != _read_count_value) {
-					if (_cl_dump_err) {
-						printf("Error, count: %lld, expected %02x, got %02x c %x\n",
-							_read_count + i, _read_count_value, rb[i], c);
-					}
-					_error_count++;
-					if (_cl_stop_on_error) {
-						dump_serial_port_stats();
-						exit(-EIO);
-					}
-					_read_count_value = rb[i];
-				}
-				_read_count_value = next_count_value(_read_count_value);
-			}
-			_read_count += c;
-			actual_read_count += c;
-		} else {
-			break; // Do not continue! We already loop on reading.
+	int c = read(_fd, &rb, RBSIZE);
+	if (c > 0) {
+		if (_cl_rx_dump) {
+			if (_cl_rx_dump_ascii)
+				dump_data_ascii(rb, c);
+			else
+				dump_data(rb, c);
 		}
+
+		// verify read count is incrementing
+		int i;
+		for (i = 0; i < c; i++) {
+			if (rb[i] != _read_count_value) {
+				if (_cl_dump_err) {
+					printf("Error, count: %lld, expected %02x, got %02x c %x\n",
+					       _read_count + i, _read_count_value, rb[i], c);
+				}
+				_error_count++;
+				if (_cl_stop_on_error) {
+					dump_serial_port_stats();
+					exit(-EIO);
+				}
+				_read_count_value = rb[i];
+			}
+			_read_count_value = next_count_value(_read_count_value);
+		}
+		_read_count += c;
 	}
 	if (_cl_rx_detailed) {
-		printf("Read %d bytes %s\n", actual_read_count,
-		       (actual_read_count < RBSIZE)?"":"(buffer limit)");
+		printf("Read %d bytes %s\n", _read_count,
+		       (_read_count < RBSIZE)?"":"(buffer limit)");
 	}
 }
 
