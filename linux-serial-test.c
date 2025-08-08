@@ -621,6 +621,7 @@ static void process_options(int argc, char * argv[])
 }
 
 static void print_requested_baudrate() {
+	if (_cl_baud == 0) return;
 	printf("REQUESTED BAUDRATE: ");
 	printf(_is_standard_baud?"B":" ");
 	printf("%'12d", _cl_baud);
@@ -641,7 +642,7 @@ static void print_estimated_baudrate(double duration) {
         _errpercent =  ( 100.0*(_cl_baud - estimated) / _cl_baud );
 	if (_errpercent<0) _errpercent=-_errpercent;
 	printf("ESTIMATED BAUDRATE: %'16.2f", rx * bits / duration);
-	if ( _errpercent >= 1.0 )
+	if ( (_errpercent >= 1.0) && (_cl_baud > 0) )
 		printf("\t!+/- %.2f%% !", _errpercent);
 	printf("\n");
 	printf("\t(%d frames, %d bits each, received in %.2f seconds)\n",
