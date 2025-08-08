@@ -712,6 +712,10 @@ static void process_read_data(void)
 		}
 		_read_count += c;
 	}
+	if ( (c == -1) && (errno != EAGAIN) ) {
+		perror("read failed");
+	}
+	
 	if (_cl_rx_detailed) {
 		printf("Read %lld bytes %s\n", _read_count,
 		       (_read_count < RBSIZE)?"":"(buffer limit)");
