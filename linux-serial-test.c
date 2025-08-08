@@ -496,7 +496,7 @@ static void process_options(int argc, char * argv[])
 			exit(0);
 			break;
 		case 'b':
-			_cl_baud = atoi(optarg);
+			_cl_baud = (int)atof(optarg); 	/* Allow 3E6 instead of 3000000 */
 			break;
 		case 'p':
 			_cl_port = strdup(optarg);
@@ -713,7 +713,7 @@ static void process_read_data(void)
 		_read_count += c;
 	}
 	if (_cl_rx_detailed) {
-		printf("Read %d bytes %s\n", _read_count,
+		printf("Read %lld bytes %s\n", _read_count,
 		       (_read_count < RBSIZE)?"":"(buffer limit)");
 	}
 }
