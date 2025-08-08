@@ -888,6 +888,7 @@ static int diff_s(const struct timespec *t1, const struct timespec *t2)
 	return t1->tv_sec - t2->tv_sec;
 }
 
+static const int _max_error_rv = 120;
 static int compute_error_count(void)
 {
 	long long int result;
@@ -896,7 +897,7 @@ static int compute_error_count(void)
 	else
 		result = llabs(_write_count - _read_count) + _error_count;
 
-	return (result > 125) ? 125 : (int)result;
+	return (result > _max_error_rv) ? _max_error_rv : (int)result;
 }
 
 int main(int argc, char * argv[])
@@ -1145,5 +1146,9 @@ int main(int argc, char * argv[])
 	_e_baud = estimated_baudrate(diff_ms(&last_read, &start_time)/1000.0);
 	set_modem_lines(_fd, 0, TIOCM_LOOP); //seems not to be relevant for RTS reset
 
-	return compute_error_count() || (_errpercent>1.0);
+	int rv = compute_error_count();
+	if (rv == 0) {
+		if (_errpercent>1.0) rv = _max_error_rv + 1; 
+	}
+	return rv;
 }
