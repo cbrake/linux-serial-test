@@ -175,6 +175,7 @@ static void reenable_closing_wait(unsigned short oldcw)
 
 static void close_no_waiting(int fd) {
 	int oldcw = disable_closing_wait();
+	flock(_fd, LOCK_UN);
 	close(fd);
 	if (oldcw >= 0) {
 		reenable_closing_wait(oldcw);
@@ -188,7 +189,6 @@ static void exit_handler(void)
 	if (_fd >= 0) {
 		tcflush(_fd, TCIOFLUSH);
 		close_no_waiting(_fd);
-		flock(_fd, LOCK_UN);
 	}
 
 	if (_cl_port) {
