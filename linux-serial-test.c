@@ -19,8 +19,10 @@
 #include <sys/file.h>
 #include <signal.h>
 #include <stdbool.h>
-#include <locale.h>		/* For numeric grouping commas to mark thousands  */
-#include <assert.h>		/* For sanity checking */
+#include <locale.h>	    /* For numeric grouping commas to mark thousands */
+#include <assert.h>	    /* For sanity checking */
+#include <asm-generic/termbits-common.h> /* For speed_t, BOTHER baudrate  */
+static const speed_t _speed_t_max = -1;	 /* typically unsigned int */
 
 #include "setbaudrate.h"	/* For set_custom_baud() via termios2 */
 
@@ -496,6 +498,12 @@ static void process_options(int argc, char * argv[])
 			exit(0);
 			break;
 		case 'b':
+			double f = atof(optarg);
+			if (f > _speed_t_max || f < 0) {
+				fprintf(stderr, "ERROR: Invalid baud rate %'.0f ", f);
+				fprintf(stderr, "(termios2 max is %'llu)\n", _speed_t_max);
+				exit(-EINVAL);
+			}
 			_cl_baud = (int)atof(optarg); 	/* Allow 3E6 instead of 3000000 */
 			break;
 		case 'p':
