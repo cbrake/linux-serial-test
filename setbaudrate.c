@@ -40,7 +40,7 @@ extern int __ioctl_time64 (int __fd, unsigned long int __request, ...) __THROW;
 
 
 /* setserial's TIOCSSERIAL with custom_divisor is deprecated. Use termios2, if possible. */
-int set_custom_baud(int fd, int speed)
+int set_custom_baud(int fd, speed_t speed)
 {
 	// speed was not one of the POSIX baudrates, so set it directly with termios2.
 	struct termios2 tio;
