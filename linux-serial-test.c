@@ -901,7 +901,7 @@ static int diff_s(const struct timespec *t1, const struct timespec *t2)
 	return t1->tv_sec - t2->tv_sec;
 }
 
-static const int _max_error_rv = 120;
+static const int _max_error_rv = 125;
 static int compute_error_count(void)
 {
 	long long int result;
