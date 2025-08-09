@@ -60,6 +60,17 @@ int bother_set_baud(int fd, speed_t speed)
 		perror("TCSETS2 setting baudrate");
 		return ret;
 	}
-	return 0;
+	return 0;		/* sucess */
+}
+
+speed_t bother_get_baud(int fd) {
+	struct termios2 tio;
+
+	if (ioctl(fd, TCGETS2, &tio) < 0) {
+		int ret = -errno;
+		perror("TCGETS2 failed");
+		return ret;
+	}		
+	return tio.c_ispeed;
 }
 
