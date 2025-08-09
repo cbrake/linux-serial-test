@@ -78,6 +78,7 @@ int _cl_tx_timeout_ms = 2000;
 int _cl_error_on_timeout = 0;
 int _cl_no_icount = 0;
 int _cl_flush_buffers = 0;
+double _cl_baud_tolerance = 1;	/* allowable baud rate error as percentage */
 
 // Module variables
 unsigned char _write_count_value = 0;
@@ -85,15 +86,18 @@ unsigned char _read_count_value = 0;
 int _fd = -1;
 unsigned char * _write_data;
 ssize_t _write_size;
-int _e_baud = 0;
 int _ss_baud_base = 0;
 int _ss_custom_divisor = 0;
 bool _is_standard_baud = 0;
+long long int _rep_baud = 0;	/* reported baudrate from termios */
+long long int _est_baud = 0;	/* estimated baudrate, used by exit_handler() */
 
 // keep our own counts for cases where the driver stats don't work
 long long int _write_count = 0;
 long long int _read_count = 0;
 long long int _error_count = 0;
+
+// calculated values
 
 volatile sig_atomic_t sigint_received = 0;
 void sigint_handler(int s)
@@ -125,7 +129,7 @@ static int disable_closing_wait()
 	int eta = 999999999;
 
 	// Don't bother trying if it won't take long to drain.
-	int baud = _e_baud?_e_baud:_cl_baud;
+	int baud = _est_baud?_est_baud:_cl_baud;
 	if (baud) {
 		eta = ( _write_count - _read_count) * bitsperframe() / baud;
 	}
@@ -647,26 +651,34 @@ static void print_requested_baudrate() {
 	}
 }	
 
-double _errpercent = 0;
-static void print_estimated_baudrate(double duration) {
+
+static double estimate_baudrate(double duration) {
 	int rx = _read_count;
 	int bits = bitsperframe();
-	double estimated = rx * bits / duration;
-        _errpercent =  ( 100.0*(_cl_baud - estimated) / _cl_baud );
-	if (_errpercent<0) _errpercent=-_errpercent;
-	printf("ESTIMATED BAUDRATE: %'16.2f", rx * bits / duration);
-	if ( (_errpercent >= 1.0) && (_cl_baud > 0) )
-		printf("\t!+/- %.2f%% !", _errpercent);
+	if (!duration) return 0;
+	return rx * bits / duration;
+}	
+
+static double calculate_baud_error(double estimated) {
+	/* Percent variance of estimated baud from requested */
+	if (estimated == 0) return 0;
+	if (!_cl_baud) return 0;
+	//	if (_cl_no_rx) return 0;
+        double e = 100.0*(_cl_baud - estimated) / _cl_baud;
+	if (e<0) e=-e;
+	return e;
+}
+
+static void print_estimated_baudrate(double estimated, double baud_error, double duration) {
+	int rx = _read_count;
+	int bits = bitsperframe();
+	printf("ESTIMATED BAUDRATE: %'16.2f", estimated);
+	if ( (baud_error >= _cl_baud_tolerance) && (_cl_baud > 0) )
+		printf("\t!+/- %.2f%% !", baud_error);
 	printf("\n");
 	printf("\t(%d frames, %d bits each, received in %.2f seconds)\n",
 	       rx, bits, duration);
 }
-
-static double estimated_baudrate(double duration) {
-	int rx = _read_count;
-	int bits = bitsperframe();
-	return rx * bits / duration;
-}	
 
 static void dump_serial_port_stats(void)
 {
@@ -1159,20 +1171,35 @@ int main(int argc, char * argv[])
 	printf("Terminating ...\n");
 	tcflush(_fd, TCIOFLUSH);
 	dump_serial_port_stats();
-	print_requested_baudrate();
-	print_estimated_baudrate(diff_ms(&last_read, &start_time)/1000.0);
-	_e_baud = estimated_baudrate(diff_ms(&last_read, &start_time)/1000.0);
 	set_modem_lines(_fd, 0, TIOCM_LOOP); //seems not to be relevant for RTS reset
 
-	int rv = compute_error_count();
-	if ( (rv == 0) && !_cl_no_rx && !_cl_no_tx) {
-		if ( (_read_count == 0) && (_write_count > 0) ) {
-			fprintf(stderr, "ERROR: Received no data. Check loopback.\n");
-			rv = -ENOLINK;
-		}
-		else if (_cl_baud != 0) {
-			if (_errpercent>1.0) rv = _max_error_rv + 1; 
+	print_requested_baudrate();
+
+	/* estimate rx baudrate and % difference from requested */
+	double duration = diff_ms(&last_read, &start_time)/1000.0;
+	_est_baud = estimate_baudrate(duration);
+	double baud_error = calculate_baud_error(_est_baud);
+	print_estimated_baudrate(_est_baud, baud_error, duration);
+
+	int rv = 0; 
+	printf("xxx %d %d %d\n", _read_count, _write_count, _cl_no_rx);
+
+	if ( (_read_count == 0) && (_write_count > 0) ) { /* xxx  && !_cl_no_rx ? */
+		fprintf(stderr, "ERROR: Received no data. Check loopback.\n");
+		rv = -ENOLINK;
+	}
+
+	if ( rv == 0 ) {
+		/* Return an integer from 1 to 125 if there were rx errors */
+		rv = compute_error_count();
+	}
+	
+	if ( rv == 0 ) {
+		/* Check for baudrate out of tolerance */
+		if (baud_error > _cl_baud_tolerance) {
+			rv = _max_error_rv + 1; 
 		}
 	}
+
 	return rv;
 }
