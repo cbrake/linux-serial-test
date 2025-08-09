@@ -1152,7 +1152,7 @@ int main(int argc, char * argv[])
 	set_modem_lines(_fd, 0, TIOCM_LOOP); //seems not to be relevant for RTS reset
 
 	int rv = compute_error_count();
-	if (rv == 0) {
+	if (rv == 0 && _cl_baud != 0 ) {
 		if (_errpercent>1.0) rv = _max_error_rv + 1; 
 	}
 	return rv;
