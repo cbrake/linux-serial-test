@@ -504,7 +504,13 @@ static void process_options(int argc, char * argv[])
 				fprintf(stderr, "(termios2 max is %'llu)\n", (long long unsigned int) _speed_t_max);
 				exit(-EINVAL);
 			}
-			_cl_baud = (int)atof(optarg); 	/* Allow 3E6 instead of 3000000 */
+			/* The ftdi_sio kernel 6.12 module crashes for baudrates between 2147483648 and 4294967296.
+			   Remove this once drivers have been updated to handle the full range of speed_t. */
+			if ((int32_t)f < 0) {
+				fprintf(stderr, "WARNING: baud rate of %'.0f exceeds signed int32 which\n"
+					        "         may cause certain kernel modules to crash!\n", f);
+			}
+			_cl_baud = (int)atof(optarg); 	/* Allow "3E6" instead of 3000000 */
 			break;
 		case 'p':
 			_cl_port = strdup(optarg);
@@ -655,7 +661,7 @@ static void print_estimated_baudrate(double duration) {
 	printf("\n");
 	printf("\t(%d frames, %d bits each, received in %.2f seconds)\n",
 	       rx, bits, duration);
-}	
+}
 
 static double estimated_baudrate(double duration) {
 	int rx = _read_count;
