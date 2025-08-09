@@ -663,7 +663,7 @@ static double calculate_baud_error(double estimated) {
 	/* Percent variance of estimated baud from requested */
 	if (estimated == 0) return 0;
 	if (!_cl_baud) return 0;
-	//	if (_cl_no_rx) return 0;
+	if (_cl_no_rx) return 0;
         double e = 100.0*(_cl_baud - estimated) / _cl_baud;
 	if (e<0) e=-e;
 	return e;
@@ -1048,7 +1048,8 @@ int main(int argc, char * argv[])
 	if (_cl_tx_wait)
 		serial_poll.events &= ~POLLOUT;
 
-	while (!(_cl_no_rx && _cl_no_tx) && !sigint_received ) {
+	int no_rx = _cl_no_rx, no_tx = _cl_no_tx;
+	while (!(no_rx && no_tx) && !sigint_received ) {
 		struct timespec current;
 		int retval = poll(&serial_poll, 1, 1000);
 
@@ -1057,12 +1058,12 @@ int main(int argc, char * argv[])
 		if (_cl_tx_wait) {
 			if (diff_s(&current, &start_time) >= _cl_tx_wait) {
 				_cl_tx_wait = 0;
-				_cl_no_tx = 0;
+				no_tx = 0;
 				serial_poll.events |= POLLOUT;
 				printf("Start transmitting.\n");
 			} else {
-				if (!_cl_no_tx) {
-					_cl_no_tx = 1;
+				if (!no_tx) {
+					no_tx = 1;
 					serial_poll.events &= ~POLLOUT;
 				}
 			}
@@ -1105,13 +1106,13 @@ int main(int argc, char * argv[])
 			int rx_timeout, tx_timeout;
 
 			// Has it been over two seconds since we transmitted or received data?
-			rx_timeout = (!_cl_no_rx && diff_ms(&current, &last_read) > _cl_rx_timeout_ms);
-			tx_timeout = (!_cl_no_tx && diff_ms(&current, &last_write) > _cl_tx_timeout_ms);
+			rx_timeout = (!no_rx && diff_ms(&current, &last_read) > _cl_rx_timeout_ms);
+			tx_timeout = (!no_tx && diff_ms(&current, &last_write) > _cl_tx_timeout_ms);
 			// Special case - we don't want to warn about receive
 			// timeouts at the end of a loopback test (where we are
 			// no longer transmitting and the receive count equals
 			// the transmit count).
-			if (_cl_no_tx && _write_count != 0 && _write_count == _read_count) {
+			if (no_tx && _write_count != 0 && _write_count == _read_count) {
 				rx_timeout = 0;
 			}
 
@@ -1152,7 +1153,7 @@ int main(int argc, char * argv[])
 			if (current.tv_sec - start_time.tv_sec >= wait_time &&
 				current.tv_sec - start_time.tv_sec - wait_time >= _cl_tx_time ) {
 				_cl_tx_time = 0;
-				_cl_no_tx = 1;
+				no_tx = 1;
 				serial_poll.events &= ~POLLOUT;
 				printf("Stopped transmitting.\n");
 			}
@@ -1161,7 +1162,7 @@ int main(int argc, char * argv[])
 		if (_cl_rx_time) {
 			if (current.tv_sec - start_time.tv_sec >= _cl_rx_time) {
 				_cl_rx_time = 0;
-				_cl_no_rx = 1;
+				no_rx = 1;
 				serial_poll.events &= ~POLLIN;
 				printf("Stopped receiving.\n");
 			}
