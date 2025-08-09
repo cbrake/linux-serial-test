@@ -21,10 +21,9 @@
 #include <stdbool.h>
 #include <locale.h>	    /* For numeric grouping commas to mark thousands */
 #include <assert.h>	    /* For sanity checking */
-#include <asm-generic/termbits-common.h> /* For speed_t (BOTHER baudrate)  */
 static const speed_t _speed_t_max = -1;	 /* typically unsigned int */
 
-#include "setbaudrate.h"	/* For set_custom_baud() via termios2 */
+#include "bother.h"		/* For set_custom_baud() via termios2 */
 
 /*
  * glibc for MIPS has its own bits/termios.h which does not define
@@ -1166,8 +1165,14 @@ int main(int argc, char * argv[])
 	set_modem_lines(_fd, 0, TIOCM_LOOP); //seems not to be relevant for RTS reset
 
 	int rv = compute_error_count();
-	if (rv == 0 && _cl_baud != 0 ) {
-		if (_errpercent>1.0) rv = _max_error_rv + 1; 
+	if ( (rv == 0) && !_cl_no_rx && !_cl_no_tx) {
+		if ( (_read_count == 0) && (_write_count > 0) ) {
+			fprintf(stderr, "ERROR: Received no data. Check loopback.\n");
+			rv = -ENOLINK;
+		}
+		else if (_cl_baud != 0) {
+			if (_errpercent>1.0) rv = _max_error_rv + 1; 
+		}
 	}
 	return rv;
 }
