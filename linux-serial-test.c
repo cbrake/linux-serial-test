@@ -23,7 +23,7 @@
 #include <assert.h>	    /* For sanity checking */
 static const speed_t _speed_t_max = -1;	 /* typically unsigned int */
 
-#include "bother.h"		/* For set_custom_baud() via termios2 */
+#include "bother.h"		/* For bother_set_baud() via termios2 */
 
 /*
  * glibc for MIPS has its own bits/termios.h which does not define
@@ -951,7 +951,7 @@ int main(int argc, char * argv[])
 	} else if (baud <= 0) {
 		/* _cl_baud was specified and is not one of the predefined baudrates. */
 		setup_serial_port(B0);
-		if (set_custom_baud(_fd, _cl_baud)) {
+		if (bother_set_baud(_fd, _cl_baud)) {
 			printf("NOTE: termios2 failed to set non-standard baudrate, approximating using divisor\n");
 			set_baud_divisor(_cl_baud, _cl_divisor);
 			baud = B38400;
