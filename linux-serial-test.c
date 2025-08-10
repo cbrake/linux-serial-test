@@ -921,11 +921,13 @@ static int diff_s(const struct timespec *t1, const struct timespec *t2)
 static const int _max_error_rv = 125;
 static int compute_error_count(void)
 {
-	long long int result;
+	long long int result = _error_count;
+#ifdef UNBUFFEREDWRITE
 	if (_cl_no_rx == 1 || _cl_no_tx == 1)
 		result = _error_count;
 	else
 		result = llabs(_write_count - _read_count) + _error_count;
+#endif
 
 	return (result > _max_error_rv) ? _max_error_rv : (int)result;
 }
