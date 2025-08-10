@@ -651,6 +651,12 @@ static void print_requested_baudrate() {
 	}
 }	
 
+static void print_reported_baudrate() {
+	if (_rep_baud == 0) return;
+	printf(" REPORTED BAUDRATE: ");
+	printf("%'13d", _rep_baud); 
+	printf("\n");
+}	
 
 static double estimate_baudrate(double duration) {
 	int rx = _read_count;
@@ -982,6 +988,8 @@ int main(int argc, char * argv[])
 		clear_custom_speed_flag();
 	}
 
+	_rep_baud = bother_get_baud(_fd);
+
 	set_modem_lines(_fd, _cl_loopback ? TIOCM_LOOP : 0, TIOCM_LOOP);
 
 	if (_cl_single_byte >= 0) {
@@ -1177,6 +1185,7 @@ int main(int argc, char * argv[])
 	set_modem_lines(_fd, 0, TIOCM_LOOP); //seems not to be relevant for RTS reset
 
 	print_requested_baudrate();
+	print_reported_baudrate();
 
 	/* estimate rx baudrate and % difference from requested */
 	double duration = diff_ms(&last_read, &start_time)/1000.0;
