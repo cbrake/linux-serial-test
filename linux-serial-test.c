@@ -150,7 +150,7 @@ static int disable_closing_wait()
 	ss.closing_wait = ASYNC_CLOSING_WAIT_NONE;
 	if (ioctl(_fd, TIOCSSERIAL, &ss) < 0) {
 		perror("TIOCSSERIAL ASYNC_CLOSING_WAIT_NONE");
-		fprintf(stderr, "Estimated time to drain: %d seconds", eta);
+		if (baud) fprintf(stderr, "Estimated time to drain: %d seconds", eta);
 		if (eta > oldcw/100) {
 			fprintf(stderr, " (closing_wait max is %ds)", oldcw/100);
 		}
@@ -1185,10 +1185,18 @@ int main(int argc, char * argv[])
 	print_estimated_baudrate(_est_baud, baud_error, duration);
 
 	int rv = 0; 
-	printf("xxx %d %d %d\n", _read_count, _write_count, _cl_no_rx);
+	if ( (_read_count == 0) && (_write_count > 0) && !_cl_no_rx ) {
+		fprintf(stderr, "ERROR: No data received. Maybe loopback is not plugged in?\n");
+		rv = -ENOLINK;
+	}
 
-	if ( (_read_count == 0) && (_write_count > 0) ) { /* xxx  && !_cl_no_rx ? */
-		fprintf(stderr, "ERROR: Received no data. Check loopback.\n");
+	if ( (_read_count == 0) && (_write_count > 0) && !_cl_no_rx ) {
+		fprintf(stderr, "ERROR: No data received. Maybe loopback is not plugged in?\n");
+		rv = -ENOLINK;
+	}
+
+	if ( (_read_count == 0) && _cl_write_after_read ) {
+		fprintf(stderr, "ERROR: No data received. Check multi-serial loopback.\n");
 		rv = -ENOLINK;
 	}
 
