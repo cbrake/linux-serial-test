@@ -78,7 +78,7 @@ int _cl_tx_timeout_ms = 2000;
 int _cl_error_on_timeout = 0;
 int _cl_no_icount = 0;
 int _cl_flush_buffers = 0;
-double _cl_baud_tolerance = 1;	/* allowable baud rate error as percentage */
+double _cl_baud_tolerance = 1.0;	/* % allowable baud rate error */
 
 // Module variables
 unsigned char _write_count_value = 0;
@@ -439,6 +439,7 @@ static void display_help(void)
 			"  -W, --tx-wait            Number of seconds to wait before to transmit (defaults to 0, meaning no wait)\n"
 			"  -Z, --error-on-timeout   Treat timeouts as errors\n"
 			"  -n, --no-icount          Do not request driver for counts of input serial line interrupts (TIOCGICOUNT)\n"
+			"  -L, --baud-tolerance     Percentage error at which an error is signaled\n"
 			"  -f, --flush-buffers      Flush RX and TX buffers before starting\n"
 			"\n"
 		);
@@ -448,7 +449,7 @@ static void process_options(int argc, char * argv[])
 {
 	for (;;) {
 		int option_index = 0;
-		static const char *short_options = "hb:p:d:D:TRsSy:z:cBertq:Qml:a:w:o:i:P:kKAI:O:W:Znf";
+		static const char *short_options = "hb:p:d:D:TRsSy:z:cBertq:Qml:a:w:o:i:P:kKAI:L:O:W:Znf";
 		static const struct option long_options[] = {
 			{"help", no_argument, 0, 0},
 			{"baud", required_argument, 0, 'b'},
@@ -483,7 +484,8 @@ static void process_options(int argc, char * argv[])
 			{"tx-timeout", required_argument, 0, 'O'},
 			{"error-on-timeout", no_argument, 0, 'Z'},
 			{"no-icount", no_argument, 0, 'n'},
-			{"flush-buffers", no_argument, 0, 'f'},
+			{"baud-tolerance", required_argument, 0, 'L'},
+ 			{"flush-buffers", no_argument, 0, 'f'},
 			{0,0,0,0},
 		};
 
@@ -630,6 +632,9 @@ static void process_options(int argc, char * argv[])
 		case 'n':
 			_cl_no_icount = 1;
 			break;
+		case 'L':
+			_cl_baud_tolerance = atof(optarg);
+			break;
 		case 'f':
 			_cl_flush_buffers = 1;
 			break;
@@ -654,7 +659,7 @@ static void print_requested_baudrate() {
 static void print_reported_baudrate() {
 	if (_rep_baud == 0) return;
 	printf(" REPORTED BAUDRATE: ");
-	printf("%'13d", _rep_baud); 
+	printf("%'13lld", _rep_baud); 
 	printf("\n");
 }	
 
@@ -1199,11 +1204,6 @@ int main(int argc, char * argv[])
 		rv = -ENOLINK;
 	}
 
-	if ( (_read_count == 0) && (_write_count > 0) && !_cl_no_rx ) {
-		fprintf(stderr, "ERROR: No data received. Maybe loopback is not plugged in?\n");
-		rv = -ENOLINK;
-	}
-
 	if ( (_read_count == 0) && _cl_write_after_read ) {
 		fprintf(stderr, "ERROR: No data received. Check multi-serial loopback.\n");
 		rv = -ENOLINK;
@@ -1216,7 +1216,7 @@ int main(int argc, char * argv[])
 	
 	if ( rv == 0 ) {
 		/* Check for baudrate out of tolerance */
-		if (baud_error > _cl_baud_tolerance) {
+		if (baud_error  > _cl_baud_tolerance) {
 			rv = _max_error_rv + 1; 
 		}
 	}
