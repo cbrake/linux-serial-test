@@ -43,29 +43,13 @@ main() {
     done | sort -n 
 }
 
-
-availableports() {
-    exec 5<&1 >/dev/tty
-    echo "Possible serial devices: "
-    for p in $(setserial -g /dev/tty* 2>/dev/null | cut -f1 -d,); do
-	if [[ ! -r $p || ! -w $p ]]; then
-	    echo "	$p: ERROR: Permission denied"
-	    continue
-	fi
-	if ! stty -F $p >/dev/null 2>&1; then
-	    echo "	$p: ERROR: Invalid port"
-	    continue
-	fi
-	echo "	$p: Available"
-	echo $p >&5
-    done
-}    
-
 getport() {
     local port
-    if [[ $1 =~ ^/ ]]; then port="$1"; shift;  fi
-    if [[ $1 =~ ^[A-Za-z] ]]; then port="/dev/$1"; shift; fi
-    if [[ $# -eq 0 ]]; then
+    if [[ $1 =~ ^/ ]]; then
+	port="$1"; shift;
+    elif [[ $1 =~ ^[A-Za-z] ]]; then
+	port="/dev/$1"; shift; 
+    elif [[ $# -eq 0 || $1 =~ ^[0-9] ]]; then
 	port=($(availableports))
 	if [[ ${#port[@]} -eq 1 ]]; then
 	    echo "Detected serial port at ${port[0]}"
@@ -74,7 +58,7 @@ getport() {
 	    echo "Error: No working serial ports found." >&2
 	    exit 1
 	else
-	    echo "${#port[@]} serial ports found. Please specify one of ${port[@]}."
+	    echo "${#port[@]} serial ports found. Please select one of ${port[@]}."
 	    select port in "${port[@]}"; do
 		if [[ $port ]]; then
 		    set -- $port "$@"
@@ -101,6 +85,23 @@ getport() {
 	exit 1
     fi	
 }
+
+availableports() {
+    exec 5<&1 >/dev/tty
+    echo "Possible serial devices: "
+    for p in $(setserial -g /dev/tty* 2>/dev/null | cut -f1 -d,); do
+	if [[ ! -r $p || ! -w $p ]]; then
+	    echo "	$p: ERROR: Permission denied"
+	    continue
+	fi
+	if ! stty -F $p >/dev/null 2>&1; then
+	    echo "	$p: ERROR: Invalid port"
+	    continue
+	fi
+	echo "	$p: Available"
+	echo $p >&5
+    done
+}    
 
 init() {
     declare -ag strerr
