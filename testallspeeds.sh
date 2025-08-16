@@ -10,7 +10,8 @@ cleanup() {
 
 main() {
     getport "$@"
-
+    set -- "${argv[@]}"
+    
     if [[ $# -eq 0 ]]; then
 	echo "Usage: testallspeeds.sh <serialdevice> [speeds ...]"
 	exit
@@ -44,6 +45,8 @@ main() {
 }
 
 getport() {
+    # Returns argv array for manipulating $@
+    declare -g argv
     local port
     if [[ $1 =~ ^/ ]]; then
 	port="$1"; shift;
@@ -53,7 +56,6 @@ getport() {
 	port=($(availableports))
 	if [[ ${#port[@]} -eq 1 ]]; then
 	    echo "Detected serial port at ${port[0]}"
-	    set -- $port "$@"
 	elif [[ ${#port[@]} -eq 0 ]]; then
 	    echo "Error: No working serial ports found." >&2
 	    exit 1
@@ -61,7 +63,6 @@ getport() {
 	    echo "${#port[@]} serial ports found. Please select one of ${port[@]}."
 	    select port in "${port[@]}"; do
 		if [[ $port ]]; then
-		    set -- $port "$@"
 		    break
 		fi
 	    done
@@ -84,6 +85,8 @@ getport() {
 	echo "Error: $port I/O error." >&2
 	exit 1
     fi	
+
+    argv=("$port" "$@")
 }
 
 availableports() {
@@ -98,7 +101,7 @@ availableports() {
 	    echo "	$p: ERROR: Invalid port"
 	    continue
 	fi
-	echo "	$p: Available"
+	echo "	$p: OK"
 	echo $p >&5
     done
 }    
