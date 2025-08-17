@@ -754,8 +754,9 @@ static void process_read_data(void)
 	}
 	
 	if (_cl_rx_detailed) {
-		printf("Read %lld bytes %s\n", _read_count,
-		       (_read_count < RBSIZE)?"":"(buffer limit)");
+		printf("Read +%d bytes, %lld bytes total", c, _read_count);
+		if (c >= RBSIZE) printf(" (buffer limit of %d)", RBSIZE);
+		printf("\n");
 	}
 }
 
@@ -796,6 +797,12 @@ static void process_write_data(void)
 
 		count += c;
 
+		if (_cl_tx_detailed) {
+			printf("Wrote +%'6zd bytes, %lld bytes total", c, _write_count + count);
+			if (c >= _write_size) printf(" (limited by buffer size)");
+			printf("\n");
+		}
+
 		if (c < actual_write_size) {
 			_write_count_value = _write_data[c];
 			repeat = 0;
@@ -805,7 +812,7 @@ static void process_write_data(void)
 	_write_count += count;
 
 	if (_cl_tx_detailed)
-		printf("wrote %zd bytes\n", count);
+		printf("      =%'6zd bytes written before blocking\n", count);
 }
 
 
