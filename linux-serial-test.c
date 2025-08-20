@@ -1002,7 +1002,7 @@ int main(int argc, char * argv[])
 
 	_rep_baud = bother_get_baud(_fd);
 	if ( _cl_baud > 0 && _rep_baud > 0 && _rep_baud != _cl_baud ) {
-		fprintf(stderr, "ERROR: tried to set baudrate to %d but driver reported %d\n", _cl_baud, _rep_baud);
+		fprintf(stderr, "ERROR: tried to set baudrate to %d but driver reported %lld\n", _cl_baud, _rep_baud);
 		exit(-EBADRQC);
 	}
 
@@ -1063,7 +1063,7 @@ int main(int argc, char * argv[])
 		tcflush(_fd, TCIOFLUSH);
 	}
 
-	struct timespec start_time, last_stat, last_timeout, last_read, last_write;
+	struct timespec start_time, last_stat, last_timeout, first_read={0}, last_read, last_write;
 
 	clock_gettime(CLOCK_MONOTONIC, &start_time);
 	last_stat = start_time;
@@ -1099,17 +1099,14 @@ int main(int argc, char * argv[])
 			perror("poll()");
 		} else if (retval) {
 			if (serial_poll.revents & POLLIN) {
-				if (_cl_rx_delay) {
-					// only read if it has been rx-delay ms
-					// since the last read
-					if (diff_ms(&current, &last_read) > _cl_rx_delay) {
-						process_read_data();
-						last_read = current;
-					}
-				} else {
+				// _cl_rx_delay forces a wait between reads
+				if ( !_cl_rx_delay || diff_ms(&current, &last_read) > _cl_rx_delay) {
 					process_read_data();
 					last_read = current;
+					if (first_read.tv_sec == 0)
+						first_read = last_read;
 				}
+				
 			}
 
 			if (serial_poll.revents & POLLOUT) {
@@ -1204,7 +1201,7 @@ int main(int argc, char * argv[])
 	print_reported_baudrate();
 
 	/* estimate rx baudrate and % difference from requested */
-	double duration = diff_ms(&last_read, &start_time)/1000.0;
+	double duration = diff_ms(&last_read, &first_read)/1000.0;
 	_est_baud = estimate_baudrate(duration);
 	double baud_error = calculate_baud_error(_est_baud);
 	print_estimated_baudrate(_est_baud, baud_error, duration);
