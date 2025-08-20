@@ -1001,6 +1001,10 @@ int main(int argc, char * argv[])
 	}
 
 	_rep_baud = bother_get_baud(_fd);
+	if ( _cl_baud > 0 && _rep_baud > 0 && _rep_baud != _cl_baud ) {
+		fprintf(stderr, "ERROR: tried to set baudrate to %d but driver reported %d\n", _cl_baud, _rep_baud);
+		exit(-EBADRQC);
+	}
 
 	set_modem_lines(_fd, _cl_loopback ? TIOCM_LOOP : 0, TIOCM_LOOP);
 
