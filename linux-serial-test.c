@@ -370,6 +370,10 @@ static int get_baud(int baud)
 	case 4000000:
 		return B4000000;
 #endif
+#ifdef B6000000
+	case 6000000:
+		return B6000000;
+#endif
 	default:
 		return -1;
 	}
@@ -399,12 +403,12 @@ void set_modem_lines(int fd, int bits, int mask)
 
 static void display_help(void)
 {
-	printf("Usage: linux-serial-test [OPTION]\n"
+	printf("Usage: linux-serial-test <-p PORT> [OPTION]\n"
 			"\n"
 			"  -h, --help\n"
 			"  -b, --baud               Baud rate, 115200, etc (115200 is default)\n"
 			"  -p, --port               Port (/dev/ttyS0, etc) (must be specified)\n"
-			"  -d, --divisor            UART Baud rate divisor (can be used to set custom baud rates)\n"
+			"  -d, --divisor            UART Baud rate divisor (old way to set custom baud rates)\n"
 			"  -D, --rx_dump            Dump Rx data (ascii, raw)\n"
 			"  -T, --detailed_tx        Detailed Tx data\n"
 			"  -R, --detailed_rx        Detailed Rx data\n"
@@ -439,7 +443,7 @@ static void display_help(void)
 			"  -W, --tx-wait            Number of seconds to wait before to transmit (defaults to 0, meaning no wait)\n"
 			"  -Z, --error-on-timeout   Treat timeouts as errors\n"
 			"  -n, --no-icount          Do not request driver for counts of input serial line interrupts (TIOCGICOUNT)\n"
-			"  -L, --baud-tolerance     Percentage error at which an error is signaled\n"
+			"  -L, --baud-tolerance     Percentage difference at which an error is signaled\n"
 			"  -f, --flush-buffers      Flush RX and TX buffers before starting\n"
 			"\n"
 		);
