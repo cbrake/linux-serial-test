@@ -8,20 +8,21 @@ serial ports together.
 This is a fork of cbrake's original linux-serial-test. It has various
 changes by hackerb9 which may or may not be improvements.
 
-1. Recognizes that Tx count will be incorrect due to buffering and does
+1. Accepts that Tx count will be incorrect due to buffering and does
    not report an error if it differs from Rx. 
+1. Does report an error if the serial hardware (or kernel module) is
+   unable to set the requested baudrate.
+1. Measures an estimate of the received baudrate and, optionally,
+   reports an error if it is significantly different than requested.
 1. EAGAIN exits process_read_data() since it likely means there is no
    more data available. This avoids the situation where
    linux-serial-test would hang and have to be killed with ^C three
    times.
-1. Estimate baudrate and do not return "success" if it is
-   significantly different than requested. Also,
 1. Allow non-standard baudrates to be specified directly instead of
-   requiring a clock divisor.
+   requiring a clock divisor. E.g., `-b 512000`.
 1. Allow baudrates to be specified in "Engineering notation" (see
    strtod(3)). For example, `-b 3E6` would be equivalent to `-b 3000000`.
-1. State the results clearly when the program exits.
-
+1. The results of the test are printed clearly when the program exits.
 
 # Compiling
 
@@ -84,16 +85,16 @@ Usage: linux-serial-test [OPTION]
 
 ## Stress test a connection
 
-    linux-serial-test -s -e -p /dev/ttyO0 -b 3000000
+    linux-serial-test -s -e -p /dev/ttyUSB0 -b 3000000
 
 This will send full bandwidth data with a counting pattern on the TX signal.
 On any data received on RX, the program will look for a counting pattern and
 report any missing data in the pattern. This test can be done using a loopback
-cable.
+cable. Hit ^C when done.
 
-## Test flow control
+## Test RTS/CTS flow control
 
-    linux-serial-test -s -e -p /dev/ttyO0 -c -l 250
+    linux-serial-test -s -e -p /dev/ttyUSB0 -c -l 250
 
 This enables RTS/CTS flow control and sends a counting pattern on the TX signal.
 Reads are delayed by 250ms between reads, which will cause the buffer to fill up
@@ -104,26 +105,25 @@ This test can be done using a loopback cable, or by running the program on both
 ends of the connection. For a two-port solution invoke the following command on
 the receiver side:
 
-    linux-serial-test -s -e -p /dev/ttyO1 -t -c -l 250
+    linux-serial-test -s -e -p /dev/ttyUSB1 -t -c -l 250
 
 and on the transmitter side:
 
-    linux-serial-test -s -e -p /dev/ttyO0 -r -c
+    linux-serial-test -s -e -p /dev/ttyUSB0 -r -c
 
 ## Stress test that can be used in a script
 
-    linux-serial-test -s -e -p /dev/ttyO0 -b 115200 -o 5 -i 7
+    linux-serial-test -s -e -p /dev/ttyUSB0 -b 115200 -o 5 -i 7
 
 This transmits for five seconds and receives for seven seconds, after which it
-will exit. The exit code will be zero if the number of received bytes matched
-the number of transmitted bytes and the received pattern was correct, so this
+will exit. The exit code will be zero if the received pattern was correct, so this
 can be used as part of an automated test script.
 
 ## Output a pattern where you can easily verify baud rate with scope:
 
-    linux-serial-test -y 0x55 -z 0x0 -p /dev/ttyO0 -b 3000000
+    linux-serial-test -y 0x55 -z 0x0 -p /dev/ttyUSB0 -b 3000000
 
 This outputs 10 bits that are easy to measure, and then multiply by 10
 in your head to get baud rate.
 
-![verify baud rate](https://github.com/cbrake/linux-serial-test/blob/master/measure-baud-rate-example.png)
+![verify baud rate](README.md.d/measure-baud-rate-example.png)
