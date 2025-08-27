@@ -1,6 +1,27 @@
 # linux-serial-test
 
+Test a serial port using a loopback adapter or by connecting two
+serial ports together. 
+
 # Linux Serial Test Application
+
+This is a fork of cbrake's original linux-serial-test. It has various
+changes by hackerb9 which may or may not be improvements.
+
+1. Recognizes that Tx count will be incorrect due to buffering and does
+   not report an error if it differs from Rx. 
+1. EAGAIN exits process_read_data() since it likely means there is no
+   more data available. This avoids the situation where
+   linux-serial-test would hang and have to be killed with ^C three
+   times.
+1. Estimate baudrate and do not return "success" if it is
+   significantly different than requested. Also,
+1. Allow non-standard baudrates to be specified directly instead of
+   requiring a clock divisor.
+1. Allow baudrates to be specified in "Engineering notation" (see
+   strtod(3)). For example, `-b 3E6` would be equivalent to `-b 3000000`.
+1. State the results clearly when the program exits.
+
 
 # Compiling
 
@@ -8,11 +29,10 @@ This is a very simple program -- there are several ways to compile it on Linux:
 
 ## directly using GCC
 
-`gcc -o linux-serial-test linux-serial-test.c`
+`gcc -o linux-serial-test linux-serial-test.c bother.c`
 
-## Using CMake
+## Using Make
 
-- `cmake ./`
 - `make`
 
 # Usage
@@ -23,7 +43,7 @@ Usage: linux-serial-test [OPTION]
   -h, --help
   -b, --baud               Baud rate, 115200, etc (115200 is default)
   -p, --port               Port (/dev/ttyS0, etc) (must be specified)
-  -d, --divisor            UART Baud rate divisor (can be used to set custom baud rates)
+  -d, --divisor            UART Baud rate divisor (old way to set custom baud rates)
   -R, --rx_dump            Dump Rx data (ascii, raw)
   -T, --detailed_tx        Detailed Tx data
   -s, --stats              Dump serial port stats every 5s
