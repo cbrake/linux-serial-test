@@ -657,7 +657,9 @@ static void setup_serial_port(int baud)
 	bzero(&newtio, sizeof(newtio)); /* clear struct for new port settings */
 
 	/* man termios get more info on below settings */
-	newtio.c_cflag = baud | CS8 | CLOCAL | CREAD;
+	newtio.c_cflag = CS8 | CLOCAL | CREAD;
+	cfsetispeed(&newtio, baud);
+	cfsetospeed(&newtio, baud);
 
 	if (_cl_rts_cts) {
 		newtio.c_cflag |= CRTSCTS;
