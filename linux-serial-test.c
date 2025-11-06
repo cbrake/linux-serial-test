@@ -58,6 +58,7 @@ int _cl_no_tx = 0;
 int _cl_rx_delay = 0;
 int _cl_tx_delay = 0;
 int _cl_tx_bytes = 0;
+int _cl_rs485 = 0;
 int _cl_rs485_after_delay = -1;
 int _cl_rs485_before_delay = 0;
 int _cl_rs485_rts_after_send = 0;
@@ -313,7 +314,9 @@ static void display_help(void)
 			"  -q, --rs485              Enable RS485 direction control on port, and set delay from when TX is\n"
 			"                           finished and RS485 driver enable is de-asserted. Delay is specified in\n"
 			"                           bit times. To optionally specify a delay from when the driver is enabled\n"
-			"                           to start of TX use 'after_delay.before_delay' (-q 1.1)\n"
+			"                           to start of TX use 'after_delay.before_delay' (-q 1.1). If no value is\n"
+			"                           given, the existing RS485 configuration is used if enabled; otherwise,\n"
+			"                           the delay defaults to 0.\n"
 			"  -Q, --rs485_rts          Deassert RTS on send, assert after send. Omitting -Q inverts this logic.\n"
 			"  -m, --no-modem           Do not clobber against any modem lines.\n"
 			"  -o, --tx-time            Number of seconds to transmit for (defaults to 0, meaning no limit)\n"
@@ -333,7 +336,7 @@ static void process_options(int argc, char * argv[])
 {
 	for (;;) {
 		int option_index = 0;
-		static const char *short_options = "hb:p:d:D:TRsSy:z:cBertq:Qml:a:w:o:i:P:kKAI:O:W:Znf";
+		static const char *short_options = "hb:p:d:D:TRsSy:z:cBertq::Qml:a:w:o:i:P:kKAI:O:W:Znf";
 		static const struct option long_options[] = {
 			{"help", no_argument, 0, 0},
 			{"baud", required_argument, 0, 'b'},
@@ -357,7 +360,7 @@ static void process_options(int argc, char * argv[])
 			{"rx-delay", required_argument, 0, 'l'},
 			{"tx-delay", required_argument, 0, 'a'},
 			{"tx-bytes", required_argument, 0, 'w'},
-			{"rs485", required_argument, 0, 'q'},
+			{"rs485", optional_argument, 0, 'q'},
 			{"rs485_rts", no_argument, 0, 'Q'},
 			{"no-modem", no_argument, 0, 'm'},
 			{"tx-time", required_argument, 0, 'o'},
@@ -463,8 +466,13 @@ static void process_options(int argc, char * argv[])
 		}
 		case 'q': {
 			char *endptr;
-			_cl_rs485_after_delay = strtol(optarg, &endptr, 0);
-			_cl_rs485_before_delay = strtol(endptr+1, &endptr, 0);
+
+			_cl_rs485 = 1;
+
+			if (optarg) {
+				_cl_rs485_after_delay = strtol(optarg, &endptr, 0);
+				_cl_rs485_before_delay = strtol(endptr + 1, &endptr, 0);
+			}
 			break;
 		}
 		case 'Q':
@@ -693,32 +701,37 @@ static void setup_serial_port(int baud)
 
 	/* enable/disable rs485 direction control, first check if RS485 is supported */
 	if(ioctl(_fd, TIOCGRS485, &rs485) < 0) {
-		if (_cl_rs485_after_delay >= 0) {
+		if (_cl_rs485) {
 			/* error could be because hardware is missing rs485 support so only print when actually trying to activate it */
 			perror("Error getting RS-485 mode");
 		}
 	} else {
-		if (rs485.flags & SER_RS485_ENABLED) {
-			printf("RS485 already enabled on port, ignoring delays if set\n");
-		} else {
-			if (_cl_rs485_after_delay >= 0) {
+		if (_cl_rs485) {
+			/* Default to 0 if not specified */
+			if (_cl_rs485_after_delay < 0)
+				_cl_rs485_after_delay = 0;
+
+			/* Skip reconfiguration if already enabled with default delays */
+			if (rs485.flags & SER_RS485_ENABLED) {
+				printf("RS485 already enabled on port with default settings\n");
+			} else {
 				/* enable RS485 */
 				rs485.flags |= SER_RS485_ENABLED | SER_RS485_RX_DURING_TX |
-					(_cl_rs485_rts_after_send ? SER_RS485_RTS_AFTER_SEND : SER_RS485_RTS_ON_SEND);
+							   (_cl_rs485_rts_after_send ? SER_RS485_RTS_AFTER_SEND : SER_RS485_RTS_ON_SEND);
 				rs485.flags &= ~(_cl_rs485_rts_after_send ? SER_RS485_RTS_ON_SEND : SER_RS485_RTS_AFTER_SEND);
 				rs485.delay_rts_after_send = _cl_rs485_after_delay;
 				rs485.delay_rts_before_send = _cl_rs485_before_delay;
-				if(ioctl(_fd, TIOCSRS485, &rs485) < 0) {
+				if (ioctl(_fd, TIOCSRS485, &rs485) < 0) {
 					perror("Error setting RS-485 mode");
 				}
-			} else {
-				/* disable RS485 */
-				rs485.flags &= ~(SER_RS485_ENABLED | SER_RS485_RTS_ON_SEND | SER_RS485_RTS_AFTER_SEND);
-				rs485.delay_rts_after_send = 0;
-				rs485.delay_rts_before_send = 0;
-				if(ioctl(_fd, TIOCSRS485, &rs485) < 0) {
-					perror("Error setting RS-232 mode");
-				}
+			}
+		} else {
+			/* disable RS485 */
+			rs485.flags &= ~(SER_RS485_ENABLED | SER_RS485_RTS_ON_SEND | SER_RS485_RTS_AFTER_SEND);
+			rs485.delay_rts_after_send = 0;
+			rs485.delay_rts_before_send = 0;
+			if (ioctl(_fd, TIOCSRS485, &rs485) < 0) {
+				perror("Error setting RS-232 mode");
 			}
 		}
 	}
