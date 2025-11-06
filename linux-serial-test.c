@@ -79,7 +79,7 @@ unsigned char _write_count_value = 0;
 unsigned char _read_count_value = 0;
 int _fd = -1;
 unsigned char * _write_data;
-ssize_t _write_size;
+size_t _write_size;
 
 // keep our own counts for cases where the driver stats don't work
 long long int _write_count = 0;
@@ -594,7 +594,7 @@ static void process_read_data(void)
 static void process_write_data(void)
 {
 	ssize_t count = 0;
-	ssize_t actual_write_size = 0;
+	size_t actual_write_size = 0;
 	int repeat = (_cl_tx_bytes == 0);
 
 	do
@@ -665,7 +665,9 @@ static void setup_serial_port(int baud)
 	bzero(&newtio, sizeof(newtio)); /* clear struct for new port settings */
 
 	/* man termios get more info on below settings */
-	newtio.c_cflag = baud | CS8 | CLOCAL | CREAD;
+	newtio.c_cflag = CS8 | CLOCAL | CREAD;
+	cfsetispeed(&newtio, baud);
+	cfsetospeed(&newtio, baud);
 
 	if (_cl_rts_cts) {
 		newtio.c_cflag |= CRTSCTS;
