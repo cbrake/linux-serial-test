@@ -57,6 +57,7 @@ Usage: linux-serial-test [OPTION]
   -Z, --error-on-timeout   Treat timeouts as errors
   -n, --no-icount          Do not request driver for counts of input serial line interrupts (TIOCGICOUNT)
   -f, --flush-buffers      Flush RX and TX buffers before starting
+  -g, --stats-start        Print TIOCGICOUNT stats on script startup before sending or receiveing data
 ```
 
 
